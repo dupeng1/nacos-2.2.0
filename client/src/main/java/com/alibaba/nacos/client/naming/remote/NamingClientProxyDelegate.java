@@ -51,7 +51,8 @@ import static com.alibaba.nacos.client.utils.LogUtils.NAMING_LOGGER;
  */
 
 /**
- * 选择通信方式
+ * 1、代理类，对所有NacosNamingService中的方法进行代理，根据实际情况选择http或gRPC协议请求服务端。
+ * 2、选择通信方式
  *  gRPC实现（默认）
  *  http实现
  */

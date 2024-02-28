@@ -32,10 +32,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * @author mai.jh
  */
+
+/**
+ * NacosRestTemplate缓存
+ */
 public final class HttpClientBeanHolder {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpClientBeanHolder.class);
-    
+
+    //NacosRestTemplate缓存，key是HttpClientFactory工厂类名，意味着每个工厂生产的NacosRestTemplate是单例
     private static final Map<String, NacosRestTemplate> SINGLETON_REST = new HashMap<>(10);
     
     private static final Map<String, NacosAsyncRestTemplate> SINGLETON_ASYNC_REST = new HashMap<>(10);

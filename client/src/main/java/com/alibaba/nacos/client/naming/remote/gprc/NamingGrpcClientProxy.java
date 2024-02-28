@@ -73,7 +73,7 @@ import static com.alibaba.nacos.client.utils.LogUtils.NAMING_LOGGER;
  */
 
 /**
- * 基于Grpc协议进行通信
+ * 底层通讯基于gRPC长连接。
  */
 public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
     
@@ -123,7 +123,7 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
     public void registerService(String serviceName, String groupName, Instance instance) throws NacosException {
         NAMING_LOGGER.info("[REGISTER-SERVICE] {} registering service {} with instance {}", namespaceId, serviceName,
                 instance);
-        //首先会在缓存重试机制需要的信息，随后会基于gRPC进行服务的调用和结果的处理
+        //将实例信息缓存到redo功能的注册服务里面（用于在客户端连接重建之后重新注册）
         redoService.cacheInstanceForRedo(serviceName, groupName, instance);
         doRegisterService(serviceName, groupName, instance);
     }
@@ -209,6 +209,7 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
      * @throws NacosException nacos exception
      */
     public void doRegisterService(String serviceName, String groupName, Instance instance) throws NacosException {
+        //构建请求对象InstanceRequest
         InstanceRequest request = new InstanceRequest(namespaceId, serviceName, groupName,
                 NamingRemoteConstants.REGISTER_INSTANCE, instance);
         requestToServer(request, Response.class);

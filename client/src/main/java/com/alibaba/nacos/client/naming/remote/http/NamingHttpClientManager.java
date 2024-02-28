@@ -46,7 +46,8 @@ public class NamingHttpClientManager implements Closeable {
     private static final boolean ENABLE_HTTPS = Boolean.getBoolean(TlsSystemConfig.TLS_ENABLE);
     
     private static final int MAX_REDIRECTS = 5;
-    
+
+    //生成NacosRestTemplate工厂
     private static final HttpClientFactory HTTP_CLIENT_FACTORY = new NamingHttpClientFactory();
     
     private static class NamingHttpClientManagerInstance {
@@ -66,6 +67,7 @@ public class NamingHttpClientManager implements Closeable {
     }
     
     public NacosRestTemplate getNacosRestTemplate() {
+        //从HttpClientBeanHolder中获取HTTP_CLIENT_FACTORY工厂对应的NacosRestTemplate
         return HttpClientBeanHolder.getNacosRestTemplate(HTTP_CLIENT_FACTORY);
     }
     

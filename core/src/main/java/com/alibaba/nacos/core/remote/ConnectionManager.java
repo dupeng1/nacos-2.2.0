@@ -51,6 +51,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author liuzunfei
  * @version $Id: ConnectionManager.java, v 0.1 2020年07月13日 7:07 PM liuzunfei Exp $
  */
+
+/**
+ * 1、负责管理所有客户端的长连接
+ * 2、每3s检测所有超过20s没发生过通讯的客户端，向客户端发起ClientDetectionRequest探测请求，
+ * 如果客户端在1s内成功响应，则检测通过，否则执行unregister方法移除Connection。
+ */
 @Service
 public class ConnectionManager {
     
@@ -145,6 +151,7 @@ public class ConnectionManager {
      *
      * @param connectionId connectionId.
      */
+    //注销（移出）连接方法
     public synchronized void unregister(String connectionId) {
         Connection remove = this.connections.remove(connectionId);
         if (remove != null) {
@@ -247,6 +254,7 @@ public class ConnectionManager {
         
         initConnectionEjector();
         // Start UnHealthy Connection Expel Task.
+        // 启动不健康连接排除功能.
         RpcScheduledExecutor.COMMON_SERVER_EXECUTOR.scheduleWithFixedDelay(() -> {
             runtimeConnectionEjector.doEject();
         }, 1000L, 3000L, TimeUnit.MILLISECONDS);

@@ -77,7 +77,7 @@ public class Instance implements Serializable {
      *
      * @since 1.0.0
      */
-    //实例是否为瞬时的，默认为true
+    //区分实例时暂时性的还是持久的，默认为true
     private boolean ephemeral = true;
     
     /**

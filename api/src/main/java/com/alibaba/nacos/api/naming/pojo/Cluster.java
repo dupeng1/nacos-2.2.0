@@ -39,6 +39,7 @@ public class Cluster implements Serializable {
     /**
      * Name of belonging service.
      */
+    //属于哪个service
     private String serviceName;
     
     /**
@@ -54,6 +55,7 @@ public class Cluster implements Serializable {
     /**
      * Default registered port for instances in this cluster.
      */
+    //默认端口
     private int defaultPort = 80;
     
     /**
