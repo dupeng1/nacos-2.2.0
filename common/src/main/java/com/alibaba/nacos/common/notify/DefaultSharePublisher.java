@@ -85,6 +85,7 @@ public class DefaultSharePublisher extends DefaultPublisher implements ShardedEv
         final Class<? extends SlowEvent> slowEventType = (Class<? extends SlowEvent>) event.getClass();
         
         // Get for Map, the algorithm is O(1).
+        //根据事件类型获取对应的Subsriber，依次执行Subsriber的onEvent方法
         Set<Subscriber> subscribers = subMappings.get(slowEventType);
         if (null == subscribers) {
             LOGGER.debug("[NotifyCenter] No subscribers for slow event {}", slowEventType.getName());

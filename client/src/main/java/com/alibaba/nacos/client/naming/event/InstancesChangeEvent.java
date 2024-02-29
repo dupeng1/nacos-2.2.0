@@ -27,6 +27,10 @@ import java.util.List;
  * @author horizonzy
  * @since 1.4.1
  */
+
+/**
+ * 实例变化事件
+ */
 public class InstancesChangeEvent extends Event {
     
     private static final long serialVersionUID = -8823087028212249603L;

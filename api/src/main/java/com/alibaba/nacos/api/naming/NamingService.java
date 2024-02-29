@@ -32,13 +32,9 @@ import java.util.List;
  */
 
 /**
- * NamingService接口是Nacos命名服务对外提供的一个统一接口
- * 接口能力：
- * 服务实例注册
- * 服务实例注销
- * 获取服务实例列表
- * 订阅
- * 取消订阅
+ * 1、NamingService接口是Nacos命名服务对外提供的一个统一接口
+ * 2、NamingService的实例化是通过NamingFactory类和上面的Nacos服务信息，
+ * 从代码中可以看出这里采用了反射机制来实例化NamingService，具体的实现类为NacosNamingService
  */
 public interface NamingService {
     

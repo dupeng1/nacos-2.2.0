@@ -42,6 +42,14 @@ import static com.alibaba.nacos.api.exception.NacosException.SERVER_ERROR;
  * @author <a href="mailto:liaochuntao@live.com">liaochuntao</a>
  * @author zongtanghu
  */
+
+/**
+ * 1、通知中心的功能主要是用【事件】对应的【发布器】来通知对应的【订阅者】来处理事件的，是一个比较典型的观察者模式的实现
+ * 2、NotifyCenter拥有所有EnventPulisher的集合
+ * 3、某一个具体的EnventPulisher拥有它的所有Subscriber的集合
+ * 4、而Subscribe 拥有它的所有EventLsiter的集合
+ *
+ */
 public class NotifyCenter {
     
     private static final Logger LOGGER = LoggerFactory.getLogger(NotifyCenter.class);
@@ -55,35 +63,40 @@ public class NotifyCenter {
     private static final EventPublisherFactory DEFAULT_PUBLISHER_FACTORY;
     
     private static final NotifyCenter INSTANCE = new NotifyCenter();
-    
+    //这个发布器用来处理慢事件
     private DefaultSharePublisher sharePublisher;
-    
+    //处理一些普通事件，由EventPublisherFactory来创建
     private static Class<? extends EventPublisher> clazz;
     
     /**
      * Publisher management container.
+     * 发布者管理容器
+     * key：事件类型的名字
+     * value：DEFAULT_PUBLISHER_FACTORY运行的结果，也就是一个DefaultPublisher
      */
     private final Map<String, EventPublisher> publisherMap = new ConcurrentHashMap<>(16);
     
     static {
         // Internal ArrayBlockingQueue buffer size. For applications with high write throughput,
         // this value needs to be increased appropriately. default value is 16384
+        // 设置ringBufferSize的大小，如果系统环境变量没有配置则默认16384（默认发布器处理事件的阻塞队列最大长度）
         String ringBufferSizeProperty = "nacos.core.notify.ring-buffer-size";
         ringBufferSize = Integer.getInteger(ringBufferSizeProperty, 16384);
         
         // The size of the public publisher's message staging queue buffer
         String shareBufferSizeProperty = "nacos.core.notify.share-buffer-size";
+        // 设置shareBufferSize的大小，如果系统环境变量没有配置则默认1024（共享发布器处理事件的阻塞队列最大长度）
         shareBufferSize = Integer.getInteger(shareBufferSizeProperty, 1024);
-        
+        // 加载SPI，【事件发布器】
         final Collection<EventPublisher> publishers = NacosServiceLoader.load(EventPublisher.class);
         Iterator<EventPublisher> iterator = publishers.iterator();
-        
+        // 如果没有事件发布器，则使用默认的事假发布器
         if (iterator.hasNext()) {
             clazz = iterator.next().getClass();
         } else {
             clazz = DefaultPublisher.class;
         }
-        
+        // 定义lambda表达式，主要用于生产发布器
         DEFAULT_PUBLISHER_FACTORY = (cls, buffer) -> {
             try {
                 EventPublisher publisher = clazz.newInstance();
@@ -98,13 +111,15 @@ public class NotifyCenter {
         try {
             
             // Create and init DefaultSharePublisher instance.
+            //创建慢事件共享发布器DefaultSharePublisher
             INSTANCE.sharePublisher = new DefaultSharePublisher();
+            //初始化慢事件共享发布器DefaultSharePublisher
             INSTANCE.sharePublisher.init(SlowEvent.class, shareBufferSize);
             
         } catch (Throwable ex) {
             LOGGER.error("Service class newInstance has error : ", ex);
         }
-        
+        // 添加线程销毁前的钩子方法
         ThreadUtils.addShutdownHook(NotifyCenter::shutdown);
     }
     
@@ -159,6 +174,7 @@ public class NotifyCenter {
      *
      * @param consumer subscriber
      */
+    //注册订阅者
     public static void registerSubscriber(final Subscriber consumer) {
         registerSubscriber(consumer, DEFAULT_PUBLISHER_FACTORY);
     }
@@ -170,15 +186,21 @@ public class NotifyCenter {
      * @param consumer subscriber
      * @param factory  publisher factory.
      */
+    //注册订阅者
     public static void registerSubscriber(final Subscriber consumer, final EventPublisherFactory factory) {
         // If you want to listen to multiple events, you do it separately,
         // based on subclass's subscribeTypes method return list, it can register to publisher.
+        //判断订阅者是不是SmartSubscriber
         if (consumer instanceof SmartSubscriber) {
             for (Class<? extends Event> subscribeType : ((SmartSubscriber) consumer).subscribeTypes()) {
                 // For case, producer: defaultSharePublisher -> consumer: smartSubscriber.
+                //如果是则循环判断事件是否是慢事件
+                //如果是慢事件，则直接加入DefaultSharePublisher
                 if (ClassUtils.isAssignableFrom(SlowEvent.class, subscribeType)) {
                     INSTANCE.sharePublisher.addSubscriber(consumer, subscribeType);
-                } else {
+                }
+                //如果是普通事件，则根据普通事件的规范名去DefaultPublisher集合取对应的Publisher。
+                else {
                     // For case, producer: defaultPublisher -> consumer: subscriber.
                     addSubscriber(consumer, subscribeType, factory);
                 }
@@ -202,18 +224,24 @@ public class NotifyCenter {
      * @param subscribeType subscribeType.
      * @param factory       publisher factory.
      */
+    //核心逻辑就是将订阅事件、发布者、订阅者三者进行绑定。而发布者与事件通过Map进行维护、发布者与订阅者通过关联关系进行维护
     private static void addSubscriber(final Subscriber consumer, Class<? extends Event> subscribeType,
             EventPublisherFactory factory) {
-        
+        // 1. 通过事件类型获得发布者主题
         final String topic = ClassUtils.getCanonicalName(subscribeType);
         synchronized (NotifyCenter.class) {
             // MapUtils.computeIfAbsent is a unsafe method.
+            //利用EventPublisherFactory生成一个EventPublisher
+            // 以主题为key，以生成的EventPublisher作为值，加入到NotifyCenter实例的publisherMap中
             MapUtil.computeIfAbsent(INSTANCE.publisherMap, topic, factory, subscribeType, ringBufferSize);
         }
+        // 获取事件对应的Publisher
         EventPublisher publisher = INSTANCE.publisherMap.get(topic);
+        //将订阅者加入到发布者中
         if (publisher instanceof ShardedEventPublisher) {
             ((ShardedEventPublisher) publisher).addSubscriber(consumer, subscribeType);
         } else {
+            // 添加到subscribers集合
             publisher.addSubscriber(consumer);
         }
     }
@@ -223,6 +251,7 @@ public class NotifyCenter {
      *
      * @param consumer subscriber instance.
      */
+    //注销订阅者
     public static void deregisterSubscriber(final Subscriber consumer) {
         if (consumer instanceof SmartSubscriber) {
             for (Class<? extends Event> subscribeType : ((SmartSubscriber) consumer).subscribeTypes()) {
@@ -275,6 +304,7 @@ public class NotifyCenter {
      *
      * @param event class Instances of the event.
      */
+    //发布事件
     public static boolean publishEvent(final Event event) {
         try {
             return publishEvent(event.getClass(), event);
@@ -291,13 +321,15 @@ public class NotifyCenter {
      * @param event     event instance.
      */
     private static boolean publishEvent(final Class<? extends Event> eventType, final Event event) {
+        // 如果是慢事件，则直接调用sharePublisher的publish方法
         if (ClassUtils.isAssignableFrom(SlowEvent.class, eventType)) {
             return INSTANCE.sharePublisher.publish(event);
         }
-        
+        // 1. 通过事件类型获得发布者主题
         final String topic = ClassUtils.getCanonicalName(eventType);
-        
+        // 2. 获得对应主题下的事件发布者
         EventPublisher publisher = INSTANCE.publisherMap.get(topic);
+        // 3. 发布事件，事件的发布调用了发布者的publish()方法
         if (publisher != null) {
             return publisher.publish(event);
         }
@@ -335,15 +367,18 @@ public class NotifyCenter {
      * @param factory      publisher factory.
      * @param queueMaxSize the publisher's queue max size.
      */
+    //NotifyCenter中管理了所有的发布者，每一种事件类型对应一个发布者。
     public static EventPublisher registerToPublisher(final Class<? extends Event> eventType,
             final EventPublisherFactory factory, final int queueMaxSize) {
         if (ClassUtils.isAssignableFrom(SlowEvent.class, eventType)) {
             return INSTANCE.sharePublisher;
         }
-        
+        // 1. 通过事件类型获得发布者主题
         final String topic = ClassUtils.getCanonicalName(eventType);
         synchronized (NotifyCenter.class) {
             // MapUtils.computeIfAbsent is a unsafe method.
+            //利用EventPublisherFactory生成一个EventPublisher
+            // 以主题为key，以生成的EventPublisher作为值，加入到NotifyCenter实例的publisherMap中
             MapUtil.computeIfAbsent(INSTANCE.publisherMap, topic, factory, eventType, queueMaxSize);
         }
         return INSTANCE.publisherMap.get(topic);

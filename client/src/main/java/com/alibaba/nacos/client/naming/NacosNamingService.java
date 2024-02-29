@@ -74,7 +74,7 @@ public class NacosNamingService implements NamingService {
     private String logName;
     
     private ServiceInfoHolder serviceInfoHolder;
-    
+    //NacosNamingService中的订阅者
     private InstancesChangeNotifier changeNotifier;
     
     private NamingClientProxy clientProxy;
@@ -101,8 +101,11 @@ public class NacosNamingService implements NamingService {
         initLogName(nacosClientProperties);
         //初始化变更事件通知器
         this.notifierEventScope = UUID.randomUUID().toString();
+        //在NotifyCenter中注册一个InstancesChangeEvent事件的发布者与订阅者，订阅者就是一个InstancesChangeNotifier
         this.changeNotifier = new InstancesChangeNotifier(this.notifierEventScope);
+        //注册发布者，建立InstancesChangeEvent.class与EventPublisher的关系。
         NotifyCenter.registerToPublisher(InstancesChangeEvent.class, 16384);
+        //注册订阅者，建立EventPublisher与Subscriber的关系。
         NotifyCenter.registerSubscriber(changeNotifier);
         //初始化服务信息
         this.serviceInfoHolder = new ServiceInfoHolder(namespace, this.notifierEventScope, nacosClientProperties);
@@ -157,8 +160,9 @@ public class NacosNamingService implements NamingService {
     
     @Override
     public void registerInstance(String serviceName, String groupName, Instance instance) throws NacosException {
-        //检查心跳
+        //检查心跳配置
         NamingUtils.checkInstanceIsLegal(instance);
+        //通过NamingClientProxy这个代理来执行服务注册操作
         clientProxy.registerService(serviceName, groupName, instance);
     }
     
@@ -420,6 +424,7 @@ public class NacosNamingService implements NamingService {
             return;
         }
         String clusterString = StringUtils.join(clusters, ",");
+        //订阅者注册监听事件
         changeNotifier.registerListener(groupName, serviceName, clusterString, listener);
         clientProxy.subscribe(serviceName, groupName, clusterString);
     }

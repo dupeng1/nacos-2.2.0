@@ -31,6 +31,12 @@ import java.util.Map;
  *
  * @author nkorange
  */
+
+/**
+ * 实例信息
+ * 1、实例基础信息
+ * 2、实例元数据
+ */
 @JsonInclude(Include.NON_NULL)
 public class Instance implements Serializable {
     

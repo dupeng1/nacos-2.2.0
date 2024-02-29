@@ -151,25 +151,33 @@ public class ServiceInfoHolder implements Closeable {
      */
     public ServiceInfo processServiceInfo(ServiceInfo serviceInfo) {
         String serviceKey = serviceInfo.getKey();
+        //判断ServiceInfo的key是否为null
         if (serviceKey == null) {
             return null;
         }
+        //判断ServiceInfo信息的完整性
         ServiceInfo oldService = serviceInfoMap.get(serviceInfo.getKey());
         if (isEmptyOrErrorPush(serviceInfo)) {
             //empty or error push, just ignore
             return oldService;
         }
+        // 缓存服务信息
         serviceInfoMap.put(serviceInfo.getKey(), serviceInfo);
+        // 判断注册的实例信息是否已变更
         boolean changed = isChangedServiceInfo(oldService, serviceInfo);
         if (StringUtils.isBlank(serviceInfo.getJsonFromServer())) {
             serviceInfo.setJsonFromServer(JacksonUtils.toJson(serviceInfo));
         }
+        // 监控服务监控缓存Map的大小
         MetricsMonitor.getServiceInfoMapSizeMonitor().set(serviceInfoMap.size());
+        // 服务实例以更变
         if (changed) {
             NAMING_LOGGER.info("current ips:({}) service: {} -> {}", serviceInfo.ipCount(), serviceInfo.getKey(),
                     JacksonUtils.toJson(serviceInfo.getHosts()));
+            // 添加实例变更事件，会被订阅者执行
             NotifyCenter.publishEvent(new InstancesChangeEvent(notifierEventScope, serviceInfo.getName(), serviceInfo.getGroupName(),
                     serviceInfo.getClusters(), serviceInfo.getHosts()));
+            // 记录Service本地文件
             DiskCache.write(serviceInfo, cacheDir);
         }
         return serviceInfo;
