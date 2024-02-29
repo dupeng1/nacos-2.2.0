@@ -40,13 +40,26 @@ import java.util.concurrent.ConcurrentMap;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 1、服务端元数据的管理者，是交给单例类NamingMetadataManager管理
+ * 2、同时这个类也是一个订阅者实例，继承了抽象类SmartSubscriber，表示可以订阅多个事件：
+ *  MetadataEvent.InstanceMetadataEvent
+ *  MetadataEvent.ServiceMetadataEvent
+ *  ClientEvent.ClientDisconnectEvent
+ *  3、主要作用：
+ *      负责查询、维护服务的服务元数据信息、实例元数据信息和过期元数据信息
+ *      同时作为订阅者，对上面3个事件进行事件的处理
+ */
 @Component
 public class NamingMetadataManager extends SmartSubscriber {
-    
+    //过期元数据
     private final Set<ExpiredMetadataInfo> expiredMetadataInfos;
-    
+
+    //服务元数据
     private ConcurrentMap<Service, ServiceMetadata> serviceMetadataMap;
-    
+
+    //实例元数据
     private ConcurrentMap<Service, ConcurrentMap<String, InstanceMetadata>> instanceMetadataMap;
     
     private static final int INITIAL_CAPACITY = 1;
@@ -55,6 +68,7 @@ public class NamingMetadataManager extends SmartSubscriber {
         serviceMetadataMap = new ConcurrentHashMap<>(1 << 10);
         instanceMetadataMap = new ConcurrentHashMap<>(1 << 10);
         expiredMetadataInfos = new ConcurrentHashSet<>();
+        //注册订阅者
         NotifyCenter.registerSubscriber(this, NamingEventPublisherFactory.getInstance());
     }
     
@@ -231,7 +245,8 @@ public class NamingMetadataManager extends SmartSubscriber {
             handleClientDisconnectEvent((ClientEvent.ClientDisconnectEvent) event);
         }
     }
-    
+
+    //客户端与服务端失联，那么将客户端对应的服务实例加入过期元数据集合，等待删除
     private void handleClientDisconnectEvent(ClientEvent.ClientDisconnectEvent event) {
         for (Service each : event.getClient().getAllPublishedService()) {
             String metadataId = event.getClient().getInstancePublishInfo(each).getMetadataId();
@@ -240,14 +255,17 @@ public class NamingMetadataManager extends SmartSubscriber {
             }
         }
     }
-    
+
+    //接收到服务元数据信息事件之后，如果是expired，加入数据过期，加入过期元数据集合，等待删除
+    //如果是expired=false，表示有服务的重新注册，那么从过期元数据集合移除
     private void handleServiceMetadataEvent(MetadataEvent.ServiceMetadataEvent event) {
         Service service = event.getService();
         if (containServiceMetadata(service)) {
             updateExpiredInfo(event.isExpired(), ExpiredMetadataInfo.newExpiredServiceMetadata(service));
         }
     }
-    
+    //接收到实例元数据信息事件之后，如果是expired，加入数据过期，加入过期元数据集合，等待删除
+    //如果是expired=false，表示有实例的重新注册，那么从过期元数据集合移除
     private void handleInstanceMetadataEvent(MetadataEvent.InstanceMetadataEvent event) {
         Service service = event.getService();
         String metadataId = event.getMetadataId();

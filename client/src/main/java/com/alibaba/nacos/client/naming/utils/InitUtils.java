@@ -48,6 +48,18 @@ public class InitUtils {
      * @param properties properties
      * @return namespace
      */
+    /**
+     * 首先判断是否配置isUseCloudNamespaceParsing，如果没有设置，则从系统参数中获取nacos.use.cloud.namespace.parsing的值，如果系统参数没有设置，则默认true；
+     * If isUseCloudNamespaceParsing=true，获取ANS方式下的Namespace：
+     * 1、首先系统参数tenant.id的值，如果系统参数tenant.id的值为空，那么获取系统参数ans.namespace的值；
+     * 2、如果步骤1的值还是空，那么获取系统环境变量ALIBABA_ALIWARE_NAMESPACE的值；
+     *
+     *
+     * 如果上面获取的namespace还是空，那么获取系统参数namespace的值；
+     * 如果还是空，那么取默认值“public“
+     * @param properties
+     * @return
+     */
     public static String initNamespaceForNaming(NacosClientProperties properties) {
         String tmpNamespace = null;
         
@@ -90,8 +102,11 @@ public class InitUtils {
     public static void initWebRootContext(NacosClientProperties properties) {
         final String webContext = properties.getProperty(PropertyKeyConst.CONTEXT_PATH);
         TemplateUtils.stringNotEmptyAndThenExecute(webContext, () -> {
+            //webContext : /nacos
             UtilAndComs.webContext = ContextPathUtil.normalizeContextPath(webContext);
+            //nacosUrlBase ： /nacos/v1/ns
             UtilAndComs.nacosUrlBase = UtilAndComs.webContext + "/v1/ns";
+            //nacosUrlInstance : /nacos/v1/instance
             UtilAndComs.nacosUrlInstance = UtilAndComs.nacosUrlBase + "/instance";
         });
     }

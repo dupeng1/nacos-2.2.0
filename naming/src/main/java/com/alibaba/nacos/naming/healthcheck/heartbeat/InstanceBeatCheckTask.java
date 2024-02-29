@@ -30,19 +30,26 @@ import java.util.List;
  *
  * @author xiweng.yy
  */
+
+/**
+ * Instance心跳检查任务
+ */
 public class InstanceBeatCheckTask implements Interceptable {
-    
+    // 心跳检查者列表
     private static final List<InstanceBeatChecker> CHECKERS = new LinkedList<>();
-    
+    // 客户端对象（因为实例就代表的是客户端）
     private final IpPortBasedClient client;
-    
+    // 服务对象
     private final Service service;
-    
+    // 健康检查信息
     private final HealthCheckInstancePublishInfo instancePublishInfo;
     
     static {
+        // 添加不健康实例检查器
         CHECKERS.add(new UnhealthyInstanceChecker());
+        // 添加过期实例检查器
         CHECKERS.add(new ExpiredInstanceChecker());
+        // 添加用户自定义的心跳检查器
         CHECKERS.addAll(NacosServiceLoader.load(InstanceBeatChecker.class));
     }
     

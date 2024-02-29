@@ -29,9 +29,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class HealthCheckInstancePublishInfo extends InstancePublishInfo {
     
     private static final long serialVersionUID = 5424801693490263492L;
-    
+    //表示最近一次心跳时间
     private long lastHeartBeatTime = System.currentTimeMillis();
-    
+    //记录和存放健康检查状态
     private HealthCheckStatus healthCheckStatus;
     
     public HealthCheckInstancePublishInfo() {

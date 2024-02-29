@@ -224,6 +224,7 @@ public abstract class RpcClient implements Closeable {
             ServerInfo serverInfo = currentConnection.serverInfo;
             boolean found = false;
             for (String serverAddress : serverListFactory.getServerList()) {
+                //当前连接对应的服务地址是否还在服务列表中
                 if (resolveServerInfo(serverAddress).getAddress().equalsIgnoreCase(serverInfo.getAddress())) {
                     found = true;
                     break;

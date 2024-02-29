@@ -44,12 +44,19 @@ import java.util.concurrent.TimeUnit;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 1、负责管理长连接clientId与Client模型的映射关系
+ * 代表对客户端服务基于RPCclient的服务管理
+ * 2、继承抽象类ClientConnectionEventListener，实现连接在建立和断开时的事件处理
+ */
 @Component("connectionBasedClientManager")
 public class ConnectionBasedClientManager extends ClientConnectionEventListener implements ClientManager {
-    
+    //负责存放客户端Client对象ConnectionBasedClient
     private final ConcurrentMap<String, ConnectionBasedClient> clients = new ConcurrentHashMap<>();
     
     public ConnectionBasedClientManager() {
+        //开启了一个定时线程，默认间隔5s执行一次线程ExpiredClientCleaner，该线程的作用时判断客户端连接是否过期，如果过期了，就断开客户端连接
         GlobalExecutor
                 .scheduleExpiredClientCleaner(new ExpiredClientCleaner(this), 0, Constants.DEFAULT_HEART_BEAT_INTERVAL,
                         TimeUnit.MILLISECONDS);
@@ -65,11 +72,13 @@ public class ConnectionBasedClientManager extends ClientConnectionEventListener 
         attributes.addClientAttribute(ClientConstants.CONNECTION_METADATA, connect.getMetaInfo());
         clientConnected(connect.getMetaInfo().getConnectionId(), attributes);
     }
-    
+
+    //客户端的创建（连接）
     @Override
     public boolean clientConnected(String clientId, ClientAttributes attributes) {
         String type = attributes.getClientAttribute(ClientConstants.CONNECTION_TYPE);
         ClientFactory clientFactory = ClientFactoryHolder.getInstance().findClientFactory(type);
+        //根据type（这里就是Grpc）创建ConnectionBasedClient，并放入集合
         return clientConnected(clientFactory.newClient(clientId, attributes));
     }
     
@@ -88,24 +97,27 @@ public class ConnectionBasedClientManager extends ClientConnectionEventListener 
         ClientFactory clientFactory = ClientFactoryHolder.getInstance().findClientFactory(type);
         return clientConnected(clientFactory.newSyncedClient(clientId, attributes));
     }
-    
+
     @Override
     public void clientDisConnected(Connection connect) {
         clientDisconnected(connect.getMetaInfo().getConnectionId());
     }
-    
+
+    //客户端的删除（失联）
     @Override
     public boolean clientDisconnected(String clientId) {
         Loggers.SRV_LOG.info("Client connection {} disconnect, remove instances and subscribers", clientId);
+        //首先从集合clients中移除；
         ConnectionBasedClient client = clients.remove(clientId);
         if (null == client) {
             return true;
         }
         client.release();
+        //然后发布事件ClientEvent.ClientDisconnectEvent
         NotifyCenter.publishEvent(new ClientEvent.ClientDisconnectEvent(client, isResponsibleClient(client)));
         return true;
     }
-    
+    // 根据clientId查询Client
     @Override
     public Client getClient(String clientId) {
         return clients.get(clientId);
@@ -149,11 +161,15 @@ public class ConnectionBasedClientManager extends ClientConnectionEventListener 
         public ExpiredClientCleaner(ConnectionBasedClientManager clientManager) {
             this.clientManager = clientManager;
         }
-        
+
+        //过期条件
+        //1、同步过来的客户端
+        //2、当前时间与上次心跳时间超过3min
         @Override
         public void run() {
             long currentTime = System.currentTimeMillis();
             for (String each : clientManager.allClientId()) {
+                //判断客户端连接是否过期，如果过期了，就断开客户端连接；
                 ConnectionBasedClient client = (ConnectionBasedClient) clientManager.getClient(each);
                 if (null != client && client.isExpire(currentTime)) {
                     clientManager.clientDisconnected(each);

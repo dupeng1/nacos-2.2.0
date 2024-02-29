@@ -42,6 +42,13 @@ import java.util.Optional;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 如果当前服务实例心跳检查超过15s，那么
+ *      设置服务实例health=false
+ *      发布服务变更事件：ServiceEvent.ServiceChangedEvent
+ *      发布客户端变更事件：ClientEvent.ClientChangedEvent
+ */
 public class UnhealthyInstanceChecker implements InstanceBeatChecker {
     
     @Override
@@ -71,12 +78,15 @@ public class UnhealthyInstanceChecker implements InstanceBeatChecker {
     }
     
     private void changeHealthyStatus(Client client, Service service, HealthCheckInstancePublishInfo instance) {
+        //设置服务实例health=false
         instance.setHealthy(false);
         Loggers.EVT_LOG
                 .info("{POS} {IP-DISABLED} valid: {}:{}@{}@{}, region: {}, msg: client last beat: {}", instance.getIp(),
                         instance.getPort(), instance.getCluster(), service.getName(), UtilsAndCommons.LOCALHOST_SITE,
                         instance.getLastHeartBeatTime());
+        //发布服务变更事件：ServiceEvent.ServiceChangedEvent
         NotifyCenter.publishEvent(new ServiceEvent.ServiceChangedEvent(service));
+        //发布客户端变更事件：ClientEvent.ClientChangedEvent
         NotifyCenter.publishEvent(new ClientEvent.ClientChangedEvent(client));
         NotifyCenter.publishEvent(new HealthStateChangeTraceEvent(System.currentTimeMillis(),
                 service.getNamespace(), service.getGroup(), service.getName(), instance.getIp(), instance.getPort(),

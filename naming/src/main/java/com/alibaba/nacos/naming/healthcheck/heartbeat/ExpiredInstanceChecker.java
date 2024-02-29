@@ -44,6 +44,13 @@ import java.util.Optional;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 如果当前服务实例心跳检查超过30s（默认），那么
+ *      从服务端的该服务的Client对象中实例集合删除该服务实例；
+ *      发布服务注销事件：ClientOperationEvent.ClientDeregisterServiceEvent；
+ *      发布服务实例元数据变更事件：MetadataEvent.InstanceMetadataEvent
+ */
 public class ExpiredInstanceChecker implements InstanceBeatChecker {
     
     @Override
@@ -75,8 +82,11 @@ public class ExpiredInstanceChecker implements InstanceBeatChecker {
     
     private void deleteIp(Client client, Service service, InstancePublishInfo instance) {
         Loggers.SRV_LOG.info("[AUTO-DELETE-IP] service: {}, ip: {}", service.toString(), JacksonUtils.toJson(instance));
+        //从服务端的该服务的Client对象中实例集合删除该服务实例
         client.removeServiceInstance(service);
+        //发布服务注销事件：ClientOperationEvent.ClientDeregisterServiceEvent
         NotifyCenter.publishEvent(new ClientOperationEvent.ClientDeregisterServiceEvent(service, client.getClientId()));
+        //发布服务实例元数据变更事件：MetadataEvent.InstanceMetadataEvent
         NotifyCenter.publishEvent(new MetadataEvent.InstanceMetadataEvent(service, instance.getMetadataId(), true));
         NotifyCenter.publishEvent(new DeregisterInstanceTraceEvent(System.currentTimeMillis(), "",
                 false, DeregisterInstanceReason.HEARTBEAT_EXPIRE, service.getNamespace(), service.getGroup(),

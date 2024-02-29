@@ -43,6 +43,11 @@ import java.util.concurrent.TimeUnit;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 负责处理连接变更，并周期性执行客户端的注册和订阅的重置操作（满足条件情况下），
+ * 其实就是为了在客户端连接失效然后再重新建立连接之后，提供了一个服务重新注册和订阅的操作。
+ */
 public class NamingGrpcRedoService implements ConnectionEventListener {
     
     private static final String REDO_THREAD_NAME = "com.alibaba.nacos.client.naming.grpc.redo";

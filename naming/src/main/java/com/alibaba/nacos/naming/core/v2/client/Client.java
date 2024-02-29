@@ -30,6 +30,10 @@ import java.util.Collection;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 一个客户端gRPC长连接对应一个Client，每个Client有自己唯一的id（clientId）。Client负责管理一个客户端的服务实例注册Publish和服务订阅Subscribe
+ */
 public interface Client {
     
     /**
@@ -59,6 +63,7 @@ public interface Client {
      *
      * @return last time for updating
      */
+    // 客户端更新时间
     long getLastUpdatedTime();
     
     /**
@@ -101,6 +106,7 @@ public interface Client {
      * @param subscriber subscriber
      * @return true if add successfully, otherwise false
      */
+    // 服务订阅/取消订阅/查询订阅
     boolean addServiceSubscriber(Service service, Subscriber subscriber);
     
     /**

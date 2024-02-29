@@ -45,7 +45,7 @@ import java.util.List;
  */
 @Component("ephemeralClientOperationService")
 public class EphemeralClientOperationServiceImpl implements ClientOperationService {
-    
+    //客户端连接管理者
     private final ClientManager clientManager;
     
     public EphemeralClientOperationServiceImpl(ClientManagerDelegate clientManager) {
@@ -55,21 +55,25 @@ public class EphemeralClientOperationServiceImpl implements ClientOperationServi
     @Override
     public void registerInstance(Service service, Instance instance, String clientId) throws NacosException {
         NamingUtils.checkInstanceIsLegal(instance);
-    
+        //确保Service单例存在
         Service singleton = ServiceManager.getInstance().getSingleton(service);
         if (!singleton.isEphemeral()) {
             throw new NacosRuntimeException(NacosException.INVALID_PARAM,
                     String.format("Current service %s is persistent service, can't register ephemeral instance.",
                             singleton.getGroupedServiceName()));
         }
+        //根据客户端id，找到客户端，此处获得了connectionBasedClientManager对象的ConnectionBasedClient
         Client client = clientManager.getClient(clientId);
         if (!clientIsLegal(client, clientId)) {
             return;
         }
+        //客户端Instance模型，转换为服务端Instance模型
         InstancePublishInfo instanceInfo = getPublishInfo(instance);
+        //将Instance储存到Client里，此处调用AbstractClient的addServiceInstance
         client.addServiceInstance(singleton, instanceInfo);
         client.setLastUpdatedTime();
         client.recalculateRevision();
+        //建立Service与ClientId的关系，ClientRegisterServiceEvent事件会被ClientServiceIndexesManager监听并处理，建立Service与发布Client的关系就是为了加速查询
         NotifyCenter.publishEvent(new ClientOperationEvent.ClientRegisterServiceEvent(singleton, clientId));
         NotifyCenter
                 .publishEvent(new MetadataEvent.InstanceMetadataEvent(singleton, instanceInfo.getMetadataId(), false));

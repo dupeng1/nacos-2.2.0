@@ -33,7 +33,8 @@ import java.util.List;
  */
 
 /**
- * 提供了一系列服务操作的接口。包括服务CRUD、实例CRUD、获取服务列表、订阅/取消订阅、健康检查、更新心跳信息等。
+ * 接口负责底层通讯，调用服务端接口
+ * 包括服务CRUD、实例CRUD、获取服务列表、订阅/取消订阅、健康检查、更新心跳信息等。
  */
 public interface NamingClientProxy extends Closeable {
     

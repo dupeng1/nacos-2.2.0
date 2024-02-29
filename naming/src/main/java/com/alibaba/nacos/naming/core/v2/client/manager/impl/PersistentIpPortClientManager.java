@@ -42,6 +42,9 @@ import java.util.concurrent.ConcurrentMap;
  * @author <a href="mailto:liaochuntao@live.com">liaochuntao</a>
  * @author xiweng.yy
  */
+/**
+ * 代表对客户端服务基于持久化模式的服务管理
+ */
 @Component("persistentIpPortClientManager")
 public class PersistentIpPortClientManager implements ClientManager {
     

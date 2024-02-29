@@ -31,16 +31,21 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author xiweng.yy
  */
+
+/**
+ * Service的容器，容器中Service都是单例
+ */
 public class ServiceManager {
     
     private static final ServiceManager INSTANCE = new ServiceManager();
-    
+    //单例Service，可以查看Service的equals和hasCode方法
     private final ConcurrentHashMap<Service, Service> singletonRepository;
-    
+    //namespace下的所有service
     private final ConcurrentHashMap<String, Set<Service>> namespaceSingletonMaps;
     
     private ServiceManager() {
         singletonRepository = new ConcurrentHashMap<>(1 << 10);
+
         namespaceSingletonMaps = new ConcurrentHashMap<>(1 << 2);
     }
     
@@ -58,6 +63,7 @@ public class ServiceManager {
      * @param service new service
      * @return if service is exist, return exist service, otherwise return new service
      */
+    //通过Map储存单例的Service
     public Service getSingleton(Service service) {
         singletonRepository.computeIfAbsent(service, key -> {
             NotifyCenter.publishEvent(new MetadataEvent.ServiceMetadataEvent(service, false));

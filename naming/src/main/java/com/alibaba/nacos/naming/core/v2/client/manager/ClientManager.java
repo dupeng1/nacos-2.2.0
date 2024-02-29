@@ -27,6 +27,12 @@ import java.util.Collection;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 客户端管理者
+ * 管理长连接clientId与Client模型的映射关系
+ * 对应的一个实现类ConnectionBasedClientManager
+ */
 public interface ClientManager {
     
     /**
@@ -69,6 +75,7 @@ public interface ClientManager {
      * @param clientId client id
      * @return client
      */
+    // 根据clientId查询Client
     Client getClient(String clientId);
     
     /**

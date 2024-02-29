@@ -47,10 +47,14 @@ import java.util.concurrent.TimeUnit;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 代表对客户端服务基于IP Port模式的临时服务管理。
+ */
 @DependsOn("clientServiceIndexesManager")
 @Component("ephemeralIpPortClientManager")
 public class EphemeralIpPortClientManager implements ClientManager {
-    
+    //负责存放客户端Client对象IpPortBasedClient
     private final ConcurrentMap<String, IpPortBasedClient> clients = new ConcurrentHashMap<>();
     
     private final DistroMapper distroMapper;
@@ -59,6 +63,7 @@ public class EphemeralIpPortClientManager implements ClientManager {
     
     public EphemeralIpPortClientManager(DistroMapper distroMapper, SwitchDomain switchDomain) {
         this.distroMapper = distroMapper;
+        //开启了一个定时线程，默认间隔5s执行一次线程ExpiredClientCleaner，该线程的作用时判断客户端连接是否过期，如果过期了，就断开客户端连接
         GlobalExecutor.scheduleExpiredClientCleaner(new ExpiredClientCleaner(this, switchDomain), 0,
                 Constants.DEFAULT_HEART_BEAT_INTERVAL, TimeUnit.MILLISECONDS);
         clientFactory = ClientFactoryHolder.getInstance().findClientFactory(ClientConstants.EPHEMERAL_IP_PORT);
@@ -153,6 +158,7 @@ public class EphemeralIpPortClientManager implements ClientManager {
         public void run() {
             long currentTime = System.currentTimeMillis();
             for (String each : clientManager.allClientId()) {
+                //判断客户端连接是否过期，如果过期了，就断开客户端连接；
                 IpPortBasedClient client = (IpPortBasedClient) clientManager.getClient(each);
                 if (null != client && isExpireClient(currentTime, client)) {
                     clientManager.clientDisconnected(each);

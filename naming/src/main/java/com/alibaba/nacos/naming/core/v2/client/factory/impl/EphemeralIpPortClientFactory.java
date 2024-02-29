@@ -28,13 +28,19 @@ import static com.alibaba.nacos.naming.constants.ClientConstants.REVISION;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 负责创建IpPortBasedClient工厂对象
+ */
 public class EphemeralIpPortClientFactory implements ClientFactory<IpPortBasedClient> {
     
     @Override
     public String getType() {
+        //类型名为ephemeralIpPort
         return ClientConstants.EPHEMERAL_IP_PORT;
     }
-    
+
+    //负责创建IpPortBasedClient，表示创建基于IP地址连接的客户端（临时服务实例）
     @Override
     public IpPortBasedClient newClient(String clientId, ClientAttributes attributes) {
         long revision = attributes.getClientAttribute(REVISION, 0);

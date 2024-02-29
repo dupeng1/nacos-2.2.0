@@ -35,6 +35,10 @@ import org.springframework.stereotype.Component;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 用于Node节点之间元数据信息一致性的处理，通过CPProtocol协议对象，向其他节点发送GRPC请求对象（WriteReqeust)来同步元数据信息
+ */
 @Component
 public class NamingMetadataOperateService {
     
@@ -53,6 +57,7 @@ public class NamingMetadataOperateService {
      * @param service         service of metadata
      * @param serviceMetadata metadata
      */
+    //ServiceMetadata的更新
     public void updateServiceMetadata(Service service, ServiceMetadata serviceMetadata) {
         MetadataOperation<ServiceMetadata> operation = buildMetadataOperation(service);
         operation.setMetadata(serviceMetadata);
@@ -67,6 +72,7 @@ public class NamingMetadataOperateService {
      *
      * @param service service of metadata
      */
+    //ServiceMetadata的删除
     public void deleteServiceMetadata(Service service) {
         MetadataOperation<ServiceMetadata> operation = buildMetadataOperation(service);
         WriteRequest operationLog = WriteRequest.newBuilder().setGroup(Constants.SERVICE_METADATA)
@@ -82,6 +88,7 @@ public class NamingMetadataOperateService {
      * @param metadataId       instance metadataId Id
      * @param instanceMetadata metadata
      */
+    //InstanceMetadata的更新
     public void updateInstanceMetadata(Service service, String metadataId, InstanceMetadata instanceMetadata) {
         MetadataOperation<InstanceMetadata> operation = buildMetadataOperation(service);
         operation.setTag(metadataId);
@@ -98,6 +105,7 @@ public class NamingMetadataOperateService {
      * @param service    service of metadata
      * @param metadataId instance metadata Id
      */
+    //InstanceMetadata的删除
     public void deleteInstanceMetadata(Service service, String metadataId) {
         MetadataOperation<InstanceMetadata> operation = buildMetadataOperation(service);
         operation.setTag(metadataId);
@@ -114,6 +122,7 @@ public class NamingMetadataOperateService {
      * @param clusterName     cluster name
      * @param clusterMetadata cluster metadata
      */
+    //ClusterMetadata的新增
     public void addClusterMetadata(Service service, String clusterName, ClusterMetadata clusterMetadata) {
         MetadataOperation<ServiceMetadata> operation = buildMetadataOperation(service);
         ServiceMetadata serviceMetadata = new ServiceMetadata();

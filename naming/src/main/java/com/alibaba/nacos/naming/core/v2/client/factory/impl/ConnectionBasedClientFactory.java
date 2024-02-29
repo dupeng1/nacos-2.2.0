@@ -28,13 +28,19 @@ import static com.alibaba.nacos.naming.constants.ClientConstants.REVISION;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 负责创建ConnectionBasedClient工厂对象
+ */
 public class ConnectionBasedClientFactory implements ClientFactory<ConnectionBasedClient> {
     
     @Override
     public String getType() {
+        //类型名为default
         return ClientConstants.DEFAULT_FACTORY;
     }
-    
+
+    //负责创建ConnectionBasedClient，表示创建基于Grpc连接的客户端；
     @Override
     public ConnectionBasedClient newClient(String clientId, ClientAttributes attributes) {
         long revision = attributes.getClientAttribute(REVISION, 0);

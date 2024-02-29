@@ -26,13 +26,18 @@ import com.alibaba.nacos.naming.core.v2.client.impl.IpPortBasedClient;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 负责创建IpPortBasedClient工厂对象
+ */
 public class PersistentIpPortClientFactory implements ClientFactory<IpPortBasedClient> {
-    
+    //类型名为persistentIpPort
     @Override
     public String getType() {
         return ClientConstants.PERSISTENT_IP_PORT;
     }
-    
+
+    //负责创建IpPortBasedClient，表示创建基于IP地址连接的客户端（持久化服务实例）
     @Override
     public IpPortBasedClient newClient(String clientId, ClientAttributes attributes) {
         IpPortBasedClient ipPortBasedClient = new IpPortBasedClient(clientId, false);

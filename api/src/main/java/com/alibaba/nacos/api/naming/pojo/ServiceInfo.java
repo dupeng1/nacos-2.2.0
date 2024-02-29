@@ -33,6 +33,11 @@ import java.util.List;
  * @author nkorange
  * @author shizhengxing
  */
+
+/**
+ * 注册服务的信息，其中包含了服务名称、分组名称、集群信息、实例列表信息，上次更新时间等，
+ * 所以我们由此得出客户端从服务端注册中心获得到的信息在本地都以ServiceInfo作为承载者
+ */
 @JsonInclude(Include.NON_NULL)
 public class ServiceInfo {
     

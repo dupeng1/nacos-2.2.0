@@ -29,12 +29,17 @@ import java.util.List;
  */
 public abstract class AbstractNamingInterceptorChain<T extends Interceptable>
         implements NacosNamingInterceptorChain<T> {
-    
+
+    // 存储多个拦截器
     private final List<NacosNamingInterceptor<T>> interceptors;
-    
+
+    // 限制使用范围为当前包或者其子类
     protected AbstractNamingInterceptorChain(Class<? extends NacosNamingInterceptor<T>> clazz) {
         this.interceptors = new LinkedList<>();
+        // 使用SPI模式加载指定的拦截器类型
+        // 而且NacosNamingInterceptor内部有判断它需要拦截对象的类型，因此非常灵活
         interceptors.addAll(NacosServiceLoader.load(clazz));
+        // 对拦截器的顺序进行排序
         interceptors.sort(Comparator.comparingInt(NacosNamingInterceptor::order));
     }
     
@@ -49,21 +54,27 @@ public abstract class AbstractNamingInterceptorChain<T extends Interceptable>
     
     @Override
     public void addInterceptor(NacosNamingInterceptor<T> interceptor) {
+        // 若手动添加，则需要再次进行排序
         interceptors.add(interceptor);
         interceptors.sort(Comparator.comparingInt(NacosNamingInterceptor::order));
     }
     
     @Override
     public void doInterceptor(T object) {
+        // 因为内部的拦截器已经排序过了，所以直接遍历
         for (NacosNamingInterceptor<T> each : interceptors) {
+            // 若当前拦截的对象不是当前拦截器所要处理的类型则跳过
             if (!each.isInterceptType(object.getClass())) {
                 continue;
             }
+            // 执行拦截操作成功之后，继续执行拦截后操作
             if (each.intercept(object)) {
+                //成功后，调用被拦截对象的afterIntercept()方法
                 object.afterIntercept();
                 return;
             }
         }
+        // 未拦截的操作
         object.passIntercept();
     }
 }

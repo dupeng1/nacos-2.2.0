@@ -48,6 +48,15 @@ import static com.alibaba.nacos.client.utils.LogUtils.NAMING_LOGGER;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 客户端持有的本地服务信息，每次客户端从注册中心获取新的服务信息时都会调用该类
+ * 核心作用：
+ * 1、缓存ServiceInfo
+ * 2、判断ServiceInfo是否更新
+ * 3、写入本地缓存
+ * 4、发布变更事件
+ */
 public class ServiceInfoHolder implements Closeable {
     
     private static final String JM_SNAPSHOT_PATH_PROPERTY = "JM.SNAPSHOT.PATH";
@@ -57,29 +66,40 @@ public class ServiceInfoHolder implements Closeable {
     private static final String FILE_PATH_NAMING = "naming";
     
     private static final String USER_HOME_PROPERTY = "user.home";
-    
+    //ServiceInfo缓存，Nacos客户端对服务端获取到的注册信息的第一层缓存
+    //key->服务名（格式：groupName@@serviceName@@clusters）
     private final ConcurrentMap<String, ServiceInfo> serviceInfoMap;
-    
+    //故障转移反应者
     private final FailoverReactor failoverReactor;
     
     private final boolean pushEmptyProtection;
-    
+    //地缓存目录cacheDir，用于指定本地缓存的根目录和故障转移的根目录。
     private String cacheDir;
     
     private String notifierEventScope;
     
     public ServiceInfoHolder(String namespace, String notifierEventScope, NacosClientProperties properties) {
+        // 初始化并且生成缓存目录
         initCacheDir(namespace, properties);
+        //根据properties是否设置namingLoadCacheAtStart，如果设置为true（默认false），
+        // 则调用DiskCache从本地缓存目录读取服务列表加载到serviceInfoMap集合
         if (isLoadCacheAtStart(properties)) {
+            //根据配置从本地缓存初始化服务，默认false
             this.serviceInfoMap = new ConcurrentHashMap<>(DiskCache.read(this.cacheDir));
         } else {
             this.serviceInfoMap = new ConcurrentHashMap<>(16);
         }
+        // 初始化故障转移反应者，this为ServiceHolder当前对象，这里可以立即为两者相互持有对方的引用
         this.failoverReactor = new FailoverReactor(this, cacheDir);
+        //从properties配置中读取namingPushEmptyProtection配置，如果namingPushEmptyProtection=true（默认false），
+        // 表示在服务没有有效（健康）实例时，是否开启保护，开启后则会使用旧的服务实例；
         this.pushEmptyProtection = isPushEmptyProtect(properties);
         this.notifierEventScope = notifierEventScope;
     }
-    
+
+    //生成缓存目录的操作，默认路径：${user.home}/nacos/naming/public，也可以通过System.setProperty(“JM.SNAPSHOT.PATH”)自定义
+    //本地服务列表缓存在磁盘的文件目录是：{user.home}/nacos/naming/public/
+    //故障转移信息也存储在该目录下
     private void initCacheDir(String namespace, NacosClientProperties properties) {
         String jmSnapshotPath = properties.getProperty(JM_SNAPSHOT_PATH_PROPERTY);
     
@@ -120,14 +140,17 @@ public class ServiceInfoHolder implements Closeable {
     public Map<String, ServiceInfo> getServiceInfoMap() {
         return serviceInfoMap;
     }
-    
+
+    //根据服务名、服务分组、集群获取服务ServiceInfo
     public ServiceInfo getServiceInfo(final String serviceName, final String groupName, final String clusters) {
         NAMING_LOGGER.debug("failover-mode: {}", failoverReactor.isFailoverSwitch());
         String groupedServiceName = NamingUtils.getGroupedName(serviceName, groupName);
         String key = ServiceInfo.getKey(groupedServiceName, clusters);
+        //如果开启了故障转移，那么从故障转移缓存文件中读取服务；
         if (failoverReactor.isFailoverSwitch()) {
             return failoverReactor.getService(key);
         }
+        //默认不会开启故障转移，从serviceInfoMap中取
         return serviceInfoMap.get(key);
     }
     
@@ -137,6 +160,7 @@ public class ServiceInfoHolder implements Closeable {
      * @param json service json
      * @return service info
      */
+    //服务信息处理
     public ServiceInfo processServiceInfo(String json) {
         ServiceInfo serviceInfo = JacksonUtils.toObj(json, ServiceInfo.class);
         serviceInfo.setJsonFromServer(json);
@@ -149,6 +173,7 @@ public class ServiceInfoHolder implements Closeable {
      * @param serviceInfo new service info
      * @return service info
      */
+    //服务信息处理，包括更新缓存服务、发布事件、更新本地文件
     public ServiceInfo processServiceInfo(ServiceInfo serviceInfo) {
         String serviceKey = serviceInfo.getKey();
         //判断ServiceInfo的key是否为null
@@ -157,6 +182,7 @@ public class ServiceInfoHolder implements Closeable {
         }
         //判断ServiceInfo信息的完整性
         ServiceInfo oldService = serviceInfoMap.get(serviceInfo.getKey());
+        //如果服务没有实例或者服务没有健康实例，在开启pushEmptyProtection时，直接返回旧的服务
         if (isEmptyOrErrorPush(serviceInfo)) {
             //empty or error push, just ignore
             return oldService;
@@ -175,6 +201,12 @@ public class ServiceInfoHolder implements Closeable {
             NAMING_LOGGER.info("current ips:({}) service: {} -> {}", serviceInfo.ipCount(), serviceInfo.getKey(),
                     JacksonUtils.toJson(serviceInfo.getHosts()));
             // 添加实例变更事件，会被订阅者执行
+            /**
+             * NotifyCenter中进行事件发布，发布的核心逻辑是：
+             * 1. 根据InstancesChangeEvent事件类型，获得对应的CanonicalName
+             * 2. 将CanonicalName作为key，从NotifyCenter.publisherMap中获取对应的事件发布者(EventPublisher)
+             * 3. EventPublisher将InstancesChangeEvent事件进行发布
+             */
             NotifyCenter.publishEvent(new InstancesChangeEvent(notifierEventScope, serviceInfo.getName(), serviceInfo.getGroupName(),
                     serviceInfo.getClusters(), serviceInfo.getHosts()));
             // 记录Service本地文件

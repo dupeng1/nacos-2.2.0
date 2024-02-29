@@ -29,6 +29,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 服务元数据信息
+ */
 public class ServiceMetadata implements Serializable {
     
     private static final long serialVersionUID = -6605609934135069566L;
@@ -36,20 +40,25 @@ public class ServiceMetadata implements Serializable {
     /**
      * Service is ephemeral or persistence.
      */
+    //默认true，代表临时的客户端注册
     private boolean ephemeral = true;
     
     /**
      * protect threshold.
      */
+    //服务保护阈值，默认是0。（在服务实例查询时，如果服务的健康实例数占比小于等于这个阈值时，那么就会返回服务的所有实例）
     private float protectThreshold = 0.0F;
     
     /**
      * Type of {@link Selector}.
      */
+    //Selector类型，表示在服务发现是用于负载均衡使用，已废弃，默认是NoneSelector对象；
     private Selector selector = new NoneSelector();
-    
+
+    //存放服务扩展信息的Map集合
     private Map<String, String> extendData = new ConcurrentHashMap<>(1);
-    
+
+    //存放服务拥有集群的Map集合
     private Map<String, ClusterMetadata> clusters = new ConcurrentHashMap<>(1);
     
     public boolean isEphemeral() {

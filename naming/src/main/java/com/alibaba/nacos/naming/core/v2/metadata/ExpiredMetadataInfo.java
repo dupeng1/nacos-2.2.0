@@ -29,6 +29,10 @@ import java.util.Objects;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 过期元数据信息，维护过期的服务元数据；过期的元数据信息会被删除；
+ */
 public class ExpiredMetadataInfo {
     
     private final Service service;

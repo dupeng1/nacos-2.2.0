@@ -41,10 +41,14 @@ import static com.alibaba.nacos.naming.constants.ClientConstants.REVISION;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 负责存储当前客户端的服务注册表，即Service与Instance的关系，对于单个客户端来说，同一个服务只能注册一个实例
+ */
 public abstract class AbstractClient implements Client {
-    
+    //存储客户端服务及对应的实例注册信息；
     protected final ConcurrentHashMap<Service, InstancePublishInfo> publishers = new ConcurrentHashMap<>(16, 0.75f, 1);
-    
+    //存储客户端服务及对应的订阅信息；
     protected final ConcurrentHashMap<Service, Subscriber> subscribers = new ConcurrentHashMap<>(16, 0.75f, 1);
     
     protected volatile long lastUpdatedTime;
@@ -67,48 +71,61 @@ public abstract class AbstractClient implements Client {
     public long getLastUpdatedTime() {
         return lastUpdatedTime;
     }
-    
+
+    //添加客户端服务注册信息
     @Override
     public boolean addServiceInstance(Service service, InstancePublishInfo instancePublishInfo) {
+        //将服务添加到集合publishers
         if (null == publishers.put(service, instancePublishInfo)) {
+            //首次添加
             if (instancePublishInfo instanceof BatchInstancePublishInfo) {
+                //指标数据中进行实例数+实例数操作
                 MetricsMonitor.incrementIpCountWithBatchRegister(instancePublishInfo);
             } else {
+                //指标数据中进行实例数+1操作
                 MetricsMonitor.incrementInstanceCount();
             }
         }
+        //因为有客户端服务注册，表示这个客户端发生了变化，那么就要发布事件ClientChangedEvent
         NotifyCenter.publishEvent(new ClientEvent.ClientChangedEvent(this));
         Loggers.SRV_LOG.info("Client change for service {}, {}", service, getClientId());
         return true;
     }
-    
+
+    //删除客户端服务注册信息
     @Override
     public InstancePublishInfo removeServiceInstance(Service service) {
+        //将服务从集合publishers删除
         InstancePublishInfo result = publishers.remove(service);
         if (null != result) {
             if (result instanceof BatchInstancePublishInfo) {
+                //指标数据中进行实例数-实例数操作
                 MetricsMonitor.decrementIpCountWithBatchRegister(result);
             } else {
+                //指标数据中进行实例数-1操作
                 MetricsMonitor.decrementInstanceCount();
             }
+            //因为有客户端服务删除，表示这个客户端发生了变化，那么就要发布事件ClientChangedEvent
             NotifyCenter.publishEvent(new ClientEvent.ClientChangedEvent(this));
         }
         Loggers.SRV_LOG.info("Client remove for service {}, {}", service, getClientId());
         return result;
     }
-    
+
     @Override
     public InstancePublishInfo getInstancePublishInfo(Service service) {
         return publishers.get(service);
     }
-    
+
     @Override
     public Collection<Service> getAllPublishedService() {
         return publishers.keySet();
     }
-    
+
+    //添加或者删除客户端服务订阅
     @Override
     public boolean addServiceSubscriber(Service service, Subscriber subscriber) {
+        //客户端服务的订阅信息集合中进行添加
         if (null == subscribers.put(service, subscriber)) {
             MetricsMonitor.incrementSubscribeCount();
         }
@@ -117,6 +134,7 @@ public abstract class AbstractClient implements Client {
     
     @Override
     public boolean removeServiceSubscriber(Service service) {
+        //客户端服务的订阅信息集合中进行删除
         if (null != subscribers.remove(service)) {
             MetricsMonitor.decrementSubscribeCount();
         }
@@ -132,7 +150,13 @@ public abstract class AbstractClient implements Client {
     public Collection<Service> getAllSubscribeService() {
         return subscribers.keySet();
     }
-    
+
+    /**
+     * 同步数据的生成只要是为了Nacos节点之间数据一致性目的，
+     * 生成的数据主要包含了所有客户端服务的注册信息及服务所拥有的namespace、group、instance等，
+     * 返回的对象就是ClientSyncData
+     * @return
+     */
     @Override
     public ClientSyncData generateSyncData() {
         List<String> namespaces = new LinkedList<>();

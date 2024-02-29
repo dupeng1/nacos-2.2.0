@@ -56,6 +56,7 @@ public class RedoScheduledTask extends AbstractExecuteTask {
     }
     
     private void redoForInstances() {
+        //从NamingGrpcRedoService中取出所有需要redo操作的RedoData（这里一般就是当前客户端实例）；
         for (InstanceRedoData each : redoService.findInstanceRedoData()) {
             try {
                 redoForInstance(each);
@@ -65,7 +66,8 @@ public class RedoScheduledTask extends AbstractExecuteTask {
             }
         }
     }
-    
+
+    //根据RedoData的RedoType来决定执行的方法
     private void redoForInstance(InstanceRedoData redoData) throws NacosException {
         RedoData.RedoType redoType = redoData.getRedoType();
         String serviceName = redoData.getServiceName();
@@ -103,6 +105,7 @@ public class RedoScheduledTask extends AbstractExecuteTask {
     }
     
     private void redoForSubscribes() {
+        //从NamingGrpcRedoService中取出所有需要redo操作的RedoData（这里就是客户端订阅的服务实例）；
         for (SubscriberRedoData each : redoService.findSubscriberRedoData()) {
             try {
                 redoForSubscribe(each);
@@ -112,7 +115,8 @@ public class RedoScheduledTask extends AbstractExecuteTask {
             }
         }
     }
-    
+
+    //根据RedoData的RedoType来决定执行的方法
     private void redoForSubscribe(SubscriberRedoData redoData) throws NacosException {
         RedoData.RedoType redoType = redoData.getRedoType();
         String serviceName = redoData.getServiceName();

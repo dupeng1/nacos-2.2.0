@@ -45,6 +45,10 @@ import java.util.concurrent.ConcurrentMap;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 在Nacos服务端，服务及对应服务实例等相关信息就是存放在类ServiceStorage里面的
+ */
 @Component
 public class ServiceStorage {
     
@@ -55,9 +59,10 @@ public class ServiceStorage {
     private final SwitchDomain switchDomain;
     
     private final NamingMetadataManager metadataManager;
-    
+
+    //存放服务及对应的服务详细信息；
     private final ConcurrentMap<Service, ServiceInfo> serviceDataIndexes;
-    
+    //存放服务及对应拥有的集群集合（一个服务的不同实例可以设置不同的cluster）；
     private final ConcurrentMap<Service, Set<String>> serviceClusterIndex;
     
     public ServiceStorage(ClientServiceIndexesManager serviceIndexesManager, ClientManagerDelegate clientManager,
@@ -73,12 +78,19 @@ public class ServiceStorage {
     public Set<String> getClusters(Service service) {
         return serviceClusterIndex.getOrDefault(service, new HashSet<>());
     }
-    
+
+    //查询服务信息
     public ServiceInfo getData(Service service) {
+        //如果集合serviceDataIndexes中存在，那么直接获取返回；
         return serviceDataIndexes.containsKey(service) ? serviceDataIndexes.get(service) : getPushData(service);
     }
     
     public ServiceInfo getPushData(Service service) {
+        //如果集合serviceDataIndexes中不存在，从ClientServiceIndexesManager中对应的服务的客户端集合中查询对应服务的ClientId，
+        // 然后根据clientId找到对应的Client
+        // （不同实例对应不同的ClientManager，比如EphemeralIpPortClientManager、ConnectionBasedClientManager和PersistentIpPortClientManager），
+        // 从对应的ClientManager中找到clientId对应的具体Client（不同的客户端对应不同的Client，比如ConnectionBasedClient和IpPortBasedClient）,
+        // 然后从对应的Client中查询出对应Client发布（注册）的服务实例，最后组建要查询的服务实例集合返回；
         ServiceInfo result = emptyServiceInfo(service);
         if (!ServiceManager.getInstance().containSingleton(service)) {
             return result;

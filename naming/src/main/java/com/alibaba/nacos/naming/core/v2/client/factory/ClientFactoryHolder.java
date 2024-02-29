@@ -29,6 +29,10 @@ import java.util.HashMap;
  *
  * @author xiweng.yy
  */
+
+/**
+ * ClientFactory实例缓存
+ */
 public class ClientFactoryHolder {
     
     private static final ClientFactoryHolder INSTANCE = new ClientFactoryHolder();

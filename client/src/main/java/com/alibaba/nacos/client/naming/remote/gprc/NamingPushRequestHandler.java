@@ -28,6 +28,11 @@ import com.alibaba.nacos.common.remote.client.ServerRequestHandler;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 当服务端发起NotifySubscriberRequest时返回数据流时，在客户端的双向流的StreamObserver的接收通道的onNext方法里面收到这个数据流时就会交给
+ * ServerRequestHandler实例对象（在客户端的默认处理器就是NamingPushRequestHandler）来更新订阅服务在本地的服务信息；
+ */
 public class NamingPushRequestHandler implements ServerRequestHandler {
     
     private final ServiceInfoHolder serviceInfoHolder;
@@ -39,6 +44,7 @@ public class NamingPushRequestHandler implements ServerRequestHandler {
     @Override
     public Response requestReply(Request request) {
         if (request instanceof NotifySubscriberRequest) {
+            //如果服务端返回的请求是NotifySubscriberRequest，那么就会执行本地服务的更新（就是客户端订阅的服务监听来更新本地服务实例）
             NotifySubscriberRequest notifyRequest = (NotifySubscriberRequest) request;
             serviceInfoHolder.processServiceInfo(notifyRequest.getServiceInfo());
             return new NotifySubscriberResponse();

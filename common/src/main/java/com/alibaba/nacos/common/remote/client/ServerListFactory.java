@@ -23,6 +23,10 @@ import java.util.List;
  * @author liuzunfei
  * @version $Id: ServerListFactory.java, v 0.1 2020年07月14日 1:11 PM liuzunfei Exp $
  */
+
+/**
+ * 服务列表管理就是提供Nacos服务列表的初始化、查询和更新
+ */
 public interface ServerListFactory {
     
     /**
@@ -30,12 +34,14 @@ public interface ServerListFactory {
      *
      * @return server " ip:port".
      */
+    //获取下一个服务
     String genNextServer();
     
     /**
      * get current server.
      * @return server " ip:port".
      */
+    //返回当前使用的服务
     String getCurrentServer();
     
     /**
@@ -43,6 +49,7 @@ public interface ServerListFactory {
      *
      * @return servers.
      */
+    //返回所有服务列表
     List<String> getServerList();
     
 }

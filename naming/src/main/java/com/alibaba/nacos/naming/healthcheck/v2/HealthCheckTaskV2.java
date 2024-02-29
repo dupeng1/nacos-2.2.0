@@ -40,6 +40,11 @@ import java.util.Optional;
  *
  * @author nacos
  */
+
+/**
+ * 健康检查任务
+ * 在基于IPPort的Client对象中，客户端服务如果是非临时实例（ephemeral=false），那么就会创建这个健康检查任务。
+ */
 public class HealthCheckTaskV2 extends AbstractExecuteTask implements NacosHealthCheckTask {
     
     private static final int LOWER_CHECK_RT = 2000;
@@ -49,27 +54,44 @@ public class HealthCheckTaskV2 extends AbstractExecuteTask implements NacosHealt
     private static SwitchDomain switchDomain;
     
     private static NamingMetadataManager metadataManager;
-    
+
+    /**
+     * 一个客户端对象（此客户端代表提供服务用于被应用访问的客户端）
+     * 从这里可以看出，启动一个健康检查任务是以客户端为维度的
+     */
     private final IpPortBasedClient client;
     
     private final String taskId;
     
     private long checkRtNormalized = -1;
-    
+    /**
+     * 检查最佳响应时间
+     */
     private long checkRtBest = -1;
-    
+    /**
+     * 检查最差响应时间
+     */
     private long checkRtWorst = -1;
-    
+    /**
+     * 检查上次响应时间
+     */
     private long checkRtLast = -1;
-    
+    /**
+     * 检查上上次响应时间
+     */
     private long checkRtLastLast = -1;
-    
+    /**
+     * 开始时间
+     */
     private long startTime;
-    
+    /**
+     * 任务是否取消
+     */
     private volatile boolean cancelled = false;
     
     public HealthCheckTaskV2(IpPortBasedClient client) {
         this.client = client;
+        //设置任务taskId，取IpPortBasedClient的responsibleId，也就是ip:port
         this.taskId = client.getResponsibleId();
     }
     
@@ -80,20 +102,27 @@ public class HealthCheckTaskV2 extends AbstractExecuteTask implements NacosHealt
         if (metadataManager == null) {
             metadataManager = ApplicationUtils.getBean(NamingMetadataManager.class);
         }
+        // 初始化响应时间检查
         initCheckRT();
     }
-    
+
+    /**
+     * 初始化响应时间值
+     */
     private void initCheckRT() {
         if (-1 != checkRtNormalized) {
             return;
         }
         // first check time delay
+        //当前线程首次取0～5000之间一个随机数+2000作为线程执行的间隔时间(checkRtNormalized)，单位ms；
         if (null != switchDomain) {
             checkRtNormalized = LOWER_CHECK_RT + RandomUtils.nextInt(0, RandomUtils.nextInt(0, switchDomain.getTcpHealthParams().getMax()));
         } else {
             checkRtNormalized = LOWER_CHECK_RT + RandomUtils.nextInt(0, UPPER_RANDOM_CHECK_RT);
         }
+        // 最佳响应时间
         checkRtBest = Long.MAX_VALUE;
+        // 最差响应时间为0
         checkRtWorst = 0L;
     }
     
@@ -105,15 +134,24 @@ public class HealthCheckTaskV2 extends AbstractExecuteTask implements NacosHealt
     public String getTaskId() {
         return taskId;
     }
-    
+
+    /**
+     * 开始执行健康检查任务
+     */
     @Override
     public void doHealthCheck() {
         try {
             initIfNecessary();
+            //获取所有客户端注册的服务，循环每个服务，在每个循环体内，查找服务的发布信息对应的集群元数据信息，作为健康检查的参数
             for (Service each : client.getAllPublishedService()) {
+                // 只有当Service开启了健康检查才执行
                 if (switchDomain.isHealthCheckEnabled(each.getGroupedServiceName())) {
+                    // 获取Service对应的InstancePublishInfo
                     InstancePublishInfo instancePublishInfo = client.getInstancePublishInfo(each);
+                    // 获取集群元数据
                     ClusterMetadata metadata = getClusterMetadata(each, instancePublishInfo);
+                    //健康检查的处理交给HealthCheckProcessorV2Delegate。
+                    //HealthCheckProcessorV2Delegate是健康检查的处理器代理，在这里默认就是交给TcpHealthCheckProcessor来处理；（
                     ApplicationUtils.getBean(HealthCheckProcessorV2Delegate.class).process(this, each, metadata);
                     if (Loggers.EVT_LOG.isDebugEnabled()) {
                         Loggers.EVT_LOG.debug("[HEALTH-CHECK] schedule health check task: {}", client.getClientId());
@@ -125,6 +163,7 @@ public class HealthCheckTaskV2 extends AbstractExecuteTask implements NacosHealt
         } finally {
             if (!cancelled) {
                 initCheckRT();
+                //在方法结束时，向线程池重新提交任务（间隔上面的时间）；
                 HealthCheckReactor.scheduleCheck(this);
                 // worst == 0 means never checked
                 if (this.getCheckRtWorst() > 0) {
@@ -165,7 +204,13 @@ public class HealthCheckTaskV2 extends AbstractExecuteTask implements NacosHealt
     public void run() {
         doHealthCheck();
     }
-    
+
+    /**
+     * 获取集群元数据
+     * @param service               服务信息
+     * @param instancePublishInfo   服务对应的ip等信息
+     * @return
+     */
     private ClusterMetadata getClusterMetadata(Service service, InstancePublishInfo instancePublishInfo) {
         Optional<ServiceMetadata> serviceMetadata = metadataManager.getServiceMetadata(service);
         if (!serviceMetadata.isPresent()) {

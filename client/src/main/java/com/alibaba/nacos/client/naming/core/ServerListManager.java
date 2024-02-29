@@ -57,6 +57,10 @@ import static com.alibaba.nacos.common.constant.RequestUrlConstants.HTTP_PREFIX;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 服务地址列表管理
+ */
 public class ServerListManager implements ServerListFactory, Closeable {
     
     private final NacosRestTemplate nacosRestTemplate = NamingHttpClientManager.getInstance().getNacosRestTemplate();
@@ -87,6 +91,7 @@ public class ServerListManager implements ServerListFactory, Closeable {
         this.namespace = namespace;
         initServerAddr(properties);
         if (!serverList.isEmpty()) {
+            //这里随机设置当前使用的服务（索引号）
             currentIndex.set(new Random().nextInt(serverList.size()));
         }
         if (serverList.isEmpty() && StringUtils.isEmpty(endpoint)) {
@@ -95,8 +100,11 @@ public class ServerListManager implements ServerListFactory, Closeable {
     }
     
     private void initServerAddr(NacosClientProperties properties) {
+        //从配置或者环境变量中获取endpoint地址和端口。格式：endpoint:port
         this.endpoint = InitUtils.initEndpoint(properties);
         if (StringUtils.isNotEmpty(endpoint)) {
+            //endpoint是一个提供服务地址列表获取的服务地址
+            //格式：http://{endpoint}/nacos/serverlist
             this.serversFromEndpoint = getServerListFromEndpoint();
             refreshServerListExecutor = new ScheduledThreadPoolExecutor(1,
                     new NameThreadFactory("com.alibaba.nacos.client.naming.server.list.refresher"));
@@ -104,6 +112,7 @@ public class ServerListManager implements ServerListFactory, Closeable {
                     .scheduleWithFixedDelay(this::refreshServerListIfNeed, 0, refreshServerListInternal,
                             TimeUnit.MILLISECONDS);
         } else {
+            //直接从properties中配置的serverAddr读取（这种方式就不支持动态更新）
             String serverListFromProps = properties.getProperty(PropertyKeyConst.SERVER_ADDR);
             if (StringUtils.isNotEmpty(serverListFromProps)) {
                 this.serverList.addAll(Arrays.asList(serverListFromProps.split(",")));
@@ -146,15 +155,18 @@ public class ServerListManager implements ServerListFactory, Closeable {
                 NAMING_LOGGER.debug("server list provided by user: " + serverList);
                 return;
             }
+            //不够30s间隔不执行
             if (System.currentTimeMillis() - lastServerListRefreshTime < refreshServerListInternal) {
                 return;
             }
+            //从endpoint地址远程请求获取服务列表
             List<String> list = getServerListFromEndpoint();
             if (CollectionUtils.isEmpty(list)) {
                 throw new Exception("Can not acquire Nacos list");
             }
             if (null == serversFromEndpoint || !CollectionUtils.isEqualCollection(list, serversFromEndpoint)) {
                 NAMING_LOGGER.info("[SERVER-LIST] server list is updated: " + list);
+                //发生了地址变化，就更新，并发布事件ServerListChangedEvent
                 serversFromEndpoint = list;
                 lastServerListRefreshTime = System.currentTimeMillis();
                 NotifyCenter.publishEvent(new ServerListChangedEvent());
@@ -174,11 +186,15 @@ public class ServerListManager implements ServerListFactory, Closeable {
     
     @Override
     public List<String> getServerList() {
+        //优先使用配置的地址
         return serverList.isEmpty() ? serversFromEndpoint : serverList;
     }
-    
+
+    //使用轮询方式获取下一个服务地址
     @Override
     public String genNextServer() {
+        //首次随机一个地址
+        //下一个服务从随机地址的索引序号开始，轮询下一个
         int index = currentIndex.incrementAndGet() % getServerList().size();
         return getServerList().get(index);
     }

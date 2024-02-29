@@ -31,13 +31,17 @@ import java.util.concurrent.TimeUnit;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 过期元数据信息的清理
+ */
 @Component
 public class ExpiredMetadataCleaner extends AbstractNamingCleaner {
     
     private static final String EXPIRED_METADATA = "expiredMetadata";
     
     private static final int INITIAL_DELAY = 5000;
-    
+    //元数据的管理者
     private final NamingMetadataManager metadataManager;
     
     private final NamingMetadataOperateService metadataOperateService;
@@ -46,6 +50,7 @@ public class ExpiredMetadataCleaner extends AbstractNamingCleaner {
             NamingMetadataOperateService metadataOperateService) {
         this.metadataManager = metadataManager;
         this.metadataOperateService = metadataOperateService;
+        //是一个线程，在服务端初始化时，交给一个执行器来执行，默认间隔5s执行一次；
         GlobalExecutor.scheduleExpiredClientCleaner(this, INITIAL_DELAY, GlobalConfig.getExpiredMetadataCleanInterval(),
                 TimeUnit.MILLISECONDS);
     }
@@ -58,8 +63,11 @@ public class ExpiredMetadataCleaner extends AbstractNamingCleaner {
     @Override
     public void doClean() {
         long currentTime = System.currentTimeMillis();
+        //从NamingMetadataManager实例中获取到所有的expiredMetadataInfos信息；
         for (ExpiredMetadataInfo each : metadataManager.getExpiredMetadataInfos()) {
+            //比较当前时间与ExpiredMetadataInfo创建时间之差是否大于过期清理时间（默认60s）；
             if (currentTime - each.getCreateTime() > GlobalConfig.getExpiredMetadataExpiredTime()) {
+                //满足大于过期清理时间的情况下调用NamingMetadataOperateService的删除服务元数据或者实例元数据方法，来向其他Nacos节点发送同步
                 removeExpiredMetadata(each);
             }
         }

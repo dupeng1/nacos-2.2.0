@@ -73,7 +73,7 @@ import static com.alibaba.nacos.client.utils.LogUtils.NAMING_LOGGER;
  */
 
 /**
- * 底层通讯基于gRPC长连接。
+ * 底层通讯基于gRPC长连接，负责处理Grpc客户端请求。
  */
 public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
     
@@ -92,25 +92,34 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
         super(securityProxy);
         this.namespaceId = namespaceId;
         this.uuid = UUID.randomUUID().toString();
+        //Rpc请求超时时间：默认3s，支持配置；
         this.requestTimeout = Long.parseLong(properties.getProperty(CommonParams.NAMING_REQUEST_TIMEOUT, "-1"));
         Map<String, String> labels = new HashMap<>();
         labels.put(RemoteConstants.LABEL_SOURCE, RemoteConstants.LABEL_SOURCE_SDK);
         labels.put(RemoteConstants.LABEL_MODULE, RemoteConstants.LABEL_MODULE_NAMING);
+        //创建并初始化GrpcClient；
         this.rpcClient = RpcClientFactory.createClient(uuid, ConnectionType.GRPC, labels);
+        //创建并初始化Rpc连接监听NamingGrpcRedoService
         this.redoService = new NamingGrpcRedoService(this);
         start(serverListFactory, serviceInfoHolder);
     }
     
     private void start(ServerListFactory serverListFactory, ServiceInfoHolder serviceInfoHolder) throws NacosException {
+        //设置服务地址列表管理
         rpcClient.serverListFactory(serverListFactory);
+        //设置Rpc连接监听
         rpcClient.registerConnectionListener(redoService);
+        //注册ServerRequestHandler实例NamingPushRequestHandler，处理服务端返回的请求
         rpcClient.registerServerRequestHandler(new NamingPushRequestHandler(serviceInfoHolder));
+        //开始GrpcClient；
         rpcClient.start();
         NotifyCenter.registerSubscriber(this);
     }
     
     @Override
     public void onEvent(ServerListChangedEvent event) {
+        //事件发布者发现到事件ServerListChangedEvent后，通知到这个订阅者的回调方法，即发生了服务地址列表变更，
+        //然后通过RpcClient来校验当前连接对应的服务地址是否还在服务列表中（变更后），如果不在，会发起客户端重连
         rpcClient.onServerListChange();
     }
     
@@ -212,7 +221,9 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
         //构建请求对象InstanceRequest
         InstanceRequest request = new InstanceRequest(namespaceId, serviceName, groupName,
                 NamingRemoteConstants.REGISTER_INSTANCE, instance);
+        //通过Rpc发送实例注册调用
         requestToServer(request, Response.class);
+        //注册成功之后，设置InstanceRedoData该实例的注册状态为true
         redoService.instanceRegistered(serviceName, groupName);
     }
     
@@ -221,6 +232,7 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
         NAMING_LOGGER
                 .info("[DEREGISTER-SERVICE] {} deregistering service {} with instance: {}", namespaceId, serviceName,
                         instance);
+        //设置InstanceRedoData该实例的反注册状态为true
         redoService.instanceDeregister(serviceName, groupName);
         doDeregisterService(serviceName, groupName, instance);
     }
@@ -234,9 +246,12 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
      * @throws NacosException nacos exception
      */
     public void doDeregisterService(String serviceName, String groupName, Instance instance) throws NacosException {
+        //构建请求对象InstanceRequest
         InstanceRequest request = new InstanceRequest(namespaceId, serviceName, groupName,
                 NamingRemoteConstants.DE_REGISTER_INSTANCE, instance);
+        //通过Rpc发送实例注册调用
         requestToServer(request, Response.class);
+        //反注册成功后，从NamingGrpcRedoService中存在的实例重置数据中删除这个服务数据；
         redoService.removeInstanceForRedo(serviceName, groupName);
     }
     
@@ -297,6 +312,7 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
         if (NAMING_LOGGER.isDebugEnabled()) {
             NAMING_LOGGER.debug("[GRPC-SUBSCRIBE] service:{}, group:{}, cluster:{} ", serviceName, groupName, clusters);
         }
+        //向NamingGrpcRedoService的订阅缓存中添加该订阅服务的RedoData数据
         redoService.cacheSubscriberForRedo(serviceName, groupName, clusters);
         return doSubscribe(serviceName, groupName, clusters);
     }
@@ -311,9 +327,12 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
      * @throws NacosException nacos exception
      */
     public ServiceInfo doSubscribe(String serviceName, String groupName, String clusters) throws NacosException {
+        //创建服务订阅请求对象SubscribeServiceRequest，参数中订阅标识true
         SubscribeServiceRequest request = new SubscribeServiceRequest(namespaceId, groupName, serviceName, clusters,
                 true);
+        //通过Rpc发送服务订阅调用
         SubscribeServiceResponse response = requestToServer(request, SubscribeServiceResponse.class);
+        //订阅成功之后标记NamingGrpcRedoService中订阅RedoData数据的注册标识为true
         redoService.subscriberRegistered(serviceName, groupName, clusters);
         return response.getServiceInfo();
     }
@@ -324,6 +343,7 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
             NAMING_LOGGER
                     .debug("[GRPC-UNSUBSCRIBE] service:{}, group:{}, cluster:{} ", serviceName, groupName, clusters);
         }
+        //标记NamingGrpcRedoService中订阅RedoData数据的注册标识为false
         redoService.subscriberDeregister(serviceName, groupName, clusters);
         doUnsubscribe(serviceName, groupName, clusters);
     }
@@ -342,9 +362,12 @@ public class NamingGrpcClientProxy extends AbstractNamingClientProxy {
      * @throws NacosException nacos exception
      */
     public void doUnsubscribe(String serviceName, String groupName, String clusters) throws NacosException {
+        //创建服务订阅请求对象SubscribeServiceRequest，参数中订阅标识false
         SubscribeServiceRequest request = new SubscribeServiceRequest(namespaceId, groupName, serviceName, clusters,
                 false);
+        //通过Rpc发送取消服务订阅调用
         requestToServer(request, SubscribeServiceResponse.class);
+        //订阅成功之后移除NamingGrpcRedoService中订阅RedoData数据
         redoService.removeSubscriberForRedo(serviceName, groupName, clusters);
     }
     

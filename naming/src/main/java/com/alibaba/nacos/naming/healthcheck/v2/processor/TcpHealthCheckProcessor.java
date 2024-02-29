@@ -54,6 +54,10 @@ import static com.alibaba.nacos.naming.misc.Loggers.SRV_LOG;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 对Tcp客户端的健康检查
+ */
 @Component
 public class TcpHealthCheckProcessor implements HealthCheckProcessorV2, Runnable {
     
@@ -100,13 +104,16 @@ public class TcpHealthCheckProcessor implements HealthCheckProcessorV2, Runnable
             return;
         }
         // TODO handle marked(white list) logic like v1.x.
+        //在放入队列之前，如果健康检查在上次执行未完成之前（说明任务还在处理中）
         if (!instance.tryStartCheck()) {
             SRV_LOG.warn("[HEALTH-CHECK-V2] tcp check started before last one finished, service: {} : {} : {}:{}",
                     service.getGroupedServiceName(), instance.getCluster(), instance.getIp(), instance.getPort());
+            //那么要重新计算任务的健康检查响应时间，在这里健康检查响应时间相关的计算如下
             healthCheckCommon
                     .reEvaluateCheckRT(task.getCheckRtNormalized() * 2, task, switchDomain.getTcpHealthParams());
             return;
         }
+        //处理的方式就是创建Beat任务放入队列，等待执行器来执行
         taskQueue.add(new Beat(task, service, metadata, instance));
         MetricsMonitor.getTcpHealthCheckMonitor().incrementAndGet();
     }
@@ -117,6 +124,8 @@ public class TcpHealthCheckProcessor implements HealthCheckProcessorV2, Runnable
     }
     
     private void processTask() throws Exception {
+        //在服务初始化时，该线程不断从队列获取数据来执行，执行的线程是一个内部Callable实现TaskProcessor，
+        // 该任务的处理就是构建一个NIO的SocketChannel来向客户端实例验证客户端的连通性
         Collection<Callable<Void>> tasks = new LinkedList<>();
         do {
             Beat beat = taskQueue.poll(CONNECT_TIMEOUT_MS / 2, TimeUnit.MILLISECONDS);

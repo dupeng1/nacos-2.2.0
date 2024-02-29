@@ -28,6 +28,10 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 集群元数据信息，维护服务集群健康检查用；
+ */
 public class ClusterMetadata implements Serializable {
     
     private static final long serialVersionUID = -80030989533083615L;

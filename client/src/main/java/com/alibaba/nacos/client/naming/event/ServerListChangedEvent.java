@@ -24,5 +24,9 @@ import com.alibaba.nacos.common.notify.SlowEvent;
  * @author gengtuo.ygt
  * on 2021/6/7
  */
+
+/**
+ * 服务地址列表变更事件，继承SlowEvent，表示该事件在事件发布者中共享一个事件队列
+ */
 public class ServerListChangedEvent extends SlowEvent {
 }

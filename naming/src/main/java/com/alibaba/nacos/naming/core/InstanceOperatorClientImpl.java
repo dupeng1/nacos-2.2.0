@@ -67,19 +67,21 @@ import java.util.Optional;
  */
 @org.springframework.stereotype.Service
 public class InstanceOperatorClientImpl implements InstanceOperator {
-    
+    //客户端管理器
     private final ClientManager clientManager;
-    
+    //客户端操作服务 有2种具体实现
+    // EphemeralClientOperationServiceImpl
+    // PersistenceClientOperationServiceImpl
     private final ClientOperationService clientOperationService;
-    
+    //服务存储服务
     private final ServiceStorage serviceStorage;
-    
+    //元数据服务
     private final NamingMetadataOperateService metadataOperateService;
-    
+    //元数据管理器
     private final NamingMetadataManager metadataManager;
-    
+    //可以理解成全局的配置开关
     private final SwitchDomain switchDomain;
-    
+    //udp推送服务
     private final UdpPushService pushService;
     
     public InstanceOperatorClientImpl(ClientManagerDelegate clientManager,
@@ -184,15 +186,22 @@ public class InstanceOperatorClientImpl implements InstanceOperator {
     @Override
     public ServiceInfo listInstance(String namespaceId, String serviceName, Subscriber subscriber, String cluster,
             boolean healthOnly) {
+        //构建service
         Service service = getService(namespaceId, serviceName, true);
         // For adapt 1.X subscribe logic
+        // 判断客户端sdk是否支持推送功能
         if (subscriber.getPort() > 0 && pushService.canEnablePush(subscriber.getAgent())) {
             String clientId = IpPortBasedClient.getClientId(subscriber.getAddrStr(), true);
+            //创建客户端
             createIpPortClientIfAbsent(clientId);
+            //EphemeralClientOperationServiceImpl 完成服务注册功能
             clientOperationService.subscribeService(service, subscriber, clientId);
         }
+        //查询服务信息包括所有的实例列表
         ServiceInfo serviceInfo = serviceStorage.getData(service);
+        //查询服务的元数据信息
         ServiceMetadata serviceMetadata = metadataManager.getServiceMetadata(service).orElse(null);
+        //对实例列表根据集群名称/是否可用/是否健康/自定义过滤器/阈值保护层曾过滤
         ServiceInfo result = ServiceUtil
                 .selectInstancesWithHealthyProtection(serviceInfo, serviceMetadata, cluster, healthOnly, true, subscriber.getIp());
         // adapt for v1.x sdk

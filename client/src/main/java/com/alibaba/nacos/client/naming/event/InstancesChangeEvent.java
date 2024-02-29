@@ -29,7 +29,7 @@ import java.util.List;
  */
 
 /**
- * 实例变化事件
+ * 实例变更事件，ServiceInfoHolder产生
  */
 public class InstancesChangeEvent extends Event {
     

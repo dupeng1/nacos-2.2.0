@@ -76,7 +76,7 @@ public class NacosNamingService implements NamingService {
     private ServiceInfoHolder serviceInfoHolder;
     //NacosNamingService中的订阅者
     private InstancesChangeNotifier changeNotifier;
-    
+    // NamingClientProxyDelegate
     private NamingClientProxy clientProxy;
     
     private String notifierEventScope;
@@ -95,19 +95,23 @@ public class NacosNamingService implements NamingService {
         final NacosClientProperties nacosClientProperties = NacosClientProperties.PROTOTYPE.derive(properties);
         
         ValidatorUtils.checkInitParam(nacosClientProperties);
+        //namespace设置，默认public
         this.namespace = InitUtils.initNamespaceForNaming(nacosClientProperties);
         InitUtils.initSerialization();
+        //初始化web root context
         InitUtils.initWebRootContext(nacosClientProperties);
+        //初始化日志文件名
         initLogName(nacosClientProperties);
         //初始化变更事件通知器
         this.notifierEventScope = UUID.randomUUID().toString();
+        //构建实例变更事件订阅者InstancesChangeNotifier，该订阅者订阅的事件是InstancesChangeEvent；
         //在NotifyCenter中注册一个InstancesChangeEvent事件的发布者与订阅者，订阅者就是一个InstancesChangeNotifier
         this.changeNotifier = new InstancesChangeNotifier(this.notifierEventScope);
-        //注册发布者，建立InstancesChangeEvent.class与EventPublisher的关系。
+        //注册发布者，建立InstancesChangeEvent.class与EventPublisher的关系。事件发布者是DefaultPublisher
         NotifyCenter.registerToPublisher(InstancesChangeEvent.class, 16384);
         //注册订阅者，建立EventPublisher与Subscriber的关系。
         NotifyCenter.registerSubscriber(changeNotifier);
-        //初始化服务信息
+        //初始化服务信息（用于缓存本地服务信息）
         this.serviceInfoHolder = new ServiceInfoHolder(namespace, this.notifierEventScope, nacosClientProperties);
         //创建NamingClientProxy的实现类NamingClientProxyDelegate。
         //初始化clientProxy
@@ -115,13 +119,15 @@ public class NacosNamingService implements NamingService {
     }
     
     private void initLogName(NacosClientProperties properties) {
+        //首先从系统参数获取com.alibaba.nacos.naming.log.filename的值；
         logName = properties.getProperty(UtilAndComs.NACOS_NAMING_LOG_NAME);
         if (StringUtils.isEmpty(logName)) {
-            
+            //如果上一步的值没有设置，那么从properties参数获取com.alibaba.nacos.naming.log.filename的值；
             if (StringUtils
                     .isNotEmpty(properties.getProperty(UtilAndComs.NACOS_NAMING_LOG_NAME))) {
                 logName = properties.getProperty(UtilAndComs.NACOS_NAMING_LOG_NAME);
             } else {
+                //如果还是获取不到，那么取默认名：naming.log
                 logName = DEFAULT_NAMING_LOG_FILE_PATH;
             }
         }
@@ -252,20 +258,34 @@ public class NacosNamingService implements NamingService {
             throws NacosException {
         return getAllInstances(serviceName, Constants.DEFAULT_GROUP, clusters, subscribe);
     }
-    
+
+    /**
+     *
+     * @param serviceName name of service
+     * @param groupName   group of service  分组名，默认DEFAULT_GROUOP
+     * @param clusters    list of cluster   集群列表，默认为空数组
+     * @param subscribe   if subscribe the service  是否订阅，默认订阅
+     * @return
+     * @throws NacosException
+     */
     @Override
     public List<Instance> getAllInstances(String serviceName, String groupName, List<String> clusters,
             boolean subscribe) throws NacosException {
         ServiceInfo serviceInfo;
         String clusterString = StringUtils.join(clusters, ",");
+        // 是否是订阅模式
         if (subscribe) {
+            // 先从客户端缓存获取服务信息。直接从本地缓存获取服务信息(ServiceInfo)，然后从中获取实例列表，这是因为订阅机制会自动同步服务器实例的变化到本地
             serviceInfo = serviceInfoHolder.getServiceInfo(serviceName, groupName, clusterString);
             if (null == serviceInfo || !clientProxy.isSubscribed(serviceName, groupName, clusterString)) {
+                // 如果本地缓存不存在服务信息，则进行订阅。如果本地缓存中没有，那说明是首次调用，则进行订阅，在订阅完成后会获得服务信息。
                 serviceInfo = clientProxy.subscribe(serviceName, groupName, clusterString);
             }
         } else {
+            // 如果未订阅服务信息，则直接从服务器进行查询
             serviceInfo = clientProxy.queryInstancesOfService(serviceName, groupName, clusterString, 0, false);
         }
+        // 从服务信息中获取实例列表
         List<Instance> list;
         if (serviceInfo == null || CollectionUtils.isEmpty(list = serviceInfo.getHosts())) {
             return new ArrayList<>();
@@ -320,8 +340,10 @@ public class NacosNamingService implements NamingService {
         ServiceInfo serviceInfo;
         String clusterString = StringUtils.join(clusters, ",");
         if (subscribe) {
+            //首先从本地服务列表中获取服务，如果本地列表中有服务，则直接返回；
             serviceInfo = serviceInfoHolder.getServiceInfo(serviceName, groupName, clusterString);
             if (null == serviceInfo) {
+                //如果本地服务列表中没有这个服务，那么直接指定服务的订阅，流程同订阅流程，只不过这里不需要事件监听器
                 serviceInfo = clientProxy.subscribe(serviceName, groupName, clusterString);
             }
         } else {
@@ -401,7 +423,8 @@ public class NacosNamingService implements NamingService {
             return Balancer.RandomByWeight.selectHost(serviceInfo);
         }
     }
-    
+    //服务订阅，
+    // 在客户端，服务订阅意味着订阅着某个服务之后，这个服务发生的一些事件（比如服务实例变更），可以通过订阅者来通知这些事件的监听达到某些目的。
     @Override
     public void subscribe(String serviceName, EventListener listener) throws NacosException {
         subscribe(serviceName, new ArrayList<>(), listener);
@@ -424,7 +447,7 @@ public class NacosNamingService implements NamingService {
             return;
         }
         String clusterString = StringUtils.join(clusters, ",");
-        //订阅者注册监听事件
+        //订阅者注册监听事件（EventListener实例），这里的事件就是InstancesChangeEvent，这里的订阅者就是InstancesChangeNotifier
         changeNotifier.registerListener(groupName, serviceName, clusterString, listener);
         clientProxy.subscribe(serviceName, groupName, clusterString);
     }
@@ -448,6 +471,7 @@ public class NacosNamingService implements NamingService {
     public void unsubscribe(String serviceName, String groupName, List<String> clusters, EventListener listener)
             throws NacosException {
         String clustersString = StringUtils.join(clusters, ",");
+        //从订阅者InstancesChangeNotifier的事件监听器集合中删除该订阅服务指定的监听器
         changeNotifier.deregisterListener(groupName, serviceName, clustersString, listener);
         if (!changeNotifier.isSubscribed(groupName, serviceName, clustersString)) {
             clientProxy.unsubscribe(serviceName, groupName, clustersString);

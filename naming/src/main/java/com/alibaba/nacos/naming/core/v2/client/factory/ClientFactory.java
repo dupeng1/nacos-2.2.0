@@ -24,6 +24,11 @@ import com.alibaba.nacos.naming.core.v2.client.ClientAttributes;
  *
  * @author xiweng.yy
  */
+
+/**
+ * ClientFactory接口负责定义创建Client对象
+ * @param <C>
+ */
 public interface ClientFactory<C extends Client> {
     
     /**
@@ -31,6 +36,7 @@ public interface ClientFactory<C extends Client> {
      *
      * @return client type
      */
+    //返回当前Client对象的一个类型
     String getType();
     
     /**
@@ -40,6 +46,7 @@ public interface ClientFactory<C extends Client> {
      * @param attributes client attributes
      * @return new {@link Client} implementation
      */
+    //负责创建Client实例对象（本地的）
     C newClient(String clientId, ClientAttributes attributes);
     
     /**
@@ -49,5 +56,6 @@ public interface ClientFactory<C extends Client> {
      * @param attributes client attributes
      * @return new sync {@link Client} implementation
      */
+    //负责创建Client实例对象（同步过来的）
     C newSyncedClient(String clientId, ClientAttributes attributes);
 }

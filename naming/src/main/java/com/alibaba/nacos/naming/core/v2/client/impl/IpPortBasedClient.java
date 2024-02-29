@@ -36,18 +36,22 @@ import java.util.Collection;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 基于IP+Port的客户端定义
+ */
 public class IpPortBasedClient extends AbstractClient {
     
     public static final String ID_DELIMITER = "#";
-    
+    //客户端唯一标识，默认格式：ip:port#ephemeral
     private final String clientId;
-    
+    //是否临时客户端
     private final boolean ephemeral;
-    
+    //表示当前客户端的负责任的标识，在这里，默认responsibleId的值就是从clientId中取#之前的字符串
     private final String responsibleId;
-    
+    //客户端心跳检查任务ClientBeatCheckTaskV2，是一个线程
     private ClientBeatCheckTaskV2 beatCheckTask;
-    
+    //客户端健康检车任务HealthCheckTaskV2，也是一个线程
     private HealthCheckTaskV2 healthCheckTaskV2;
     
     public IpPortBasedClient(String clientId, boolean ephemeral) {
@@ -83,12 +87,24 @@ public class IpPortBasedClient extends AbstractClient {
     public String getResponsibleId() {
         return responsibleId;
     }
-    
+
+    //重写了方法添加客户端服务注册信息addServiceInstance
+    //主要是在调用父类addServiceInstance方法前对参数InstancePublishInfo调用parseToHealthCheckInstance进行类型转化，
+    // 转化为HealthCheckInstancePublishInfo
     @Override
     public boolean addServiceInstance(Service service, InstancePublishInfo instancePublishInfo) {
         return super.addServiceInstance(service, parseToHealthCheckInstance(instancePublishInfo));
     }
-    
+
+    /**
+     * 1）ephemeral=true，默认就是true
+     *
+     * 2）所有客户端注册的服务集合publishers是空（也就是没有客户端注册信息）；
+     *
+     * 3）当前时间与客户端最近更新时间之差大于客户端过期时间（默认3m）；
+     * @param currentTime unified current timestamp
+     * @return
+     */
     @Override
     public boolean isExpire(long currentTime) {
         return isEphemeral() && getAllPublishedService().isEmpty() && currentTime - getLastUpdatedTime() > ClientConfig
@@ -108,7 +124,9 @@ public class IpPortBasedClient extends AbstractClient {
             healthCheckTaskV2.setCancelled(true);
         }
     }
-    
+
+    //该方法将入参InstancePublishInfo对象转化为类HealthCheckInstancePublishInfo返回
+    //HealthCheckInstancePublishInfo在InstancePublishInfo的基础上增加了健康检查的机制：
     private HealthCheckInstancePublishInfo parseToHealthCheckInstance(InstancePublishInfo instancePublishInfo) {
         HealthCheckInstancePublishInfo result;
         if (instancePublishInfo instanceof HealthCheckInstancePublishInfo) {
@@ -132,9 +150,13 @@ public class IpPortBasedClient extends AbstractClient {
      */
     public void init() {
         if (ephemeral) {
+            //针对临时客户端，创建任务ClientBeatCheckTaskV2，交给线程池管理，间隔5s秒执行；
+            // 所以对于默认情况下，是通过这里的Client心跳检查来验证客户端是否健康的
             beatCheckTask = new ClientBeatCheckTaskV2(this);
             HealthCheckReactor.scheduleCheck(beatCheckTask);
         } else {
+            //针对非临时客户端，创建任务HealthCheckTaskV2，交给线程池管理，延迟2s+(0~5s一个随机数)时间，
+            // 这个时间首次使用后，后面的间隔时长都是一致的。
             healthCheckTaskV2 = new HealthCheckTaskV2(this);
             HealthCheckReactor.scheduleCheck(healthCheckTaskV2);
         }

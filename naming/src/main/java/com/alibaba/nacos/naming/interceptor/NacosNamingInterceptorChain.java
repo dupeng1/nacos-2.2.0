@@ -21,6 +21,11 @@ package com.alibaba.nacos.naming.interceptor;
  *
  * @author xiweng.yy
  */
+
+/**
+ * 拦截器链，拦截器链用于存储并管理多个拦截器
+ * @param <T>
+ */
 public interface NacosNamingInterceptorChain<T extends Interceptable> {
     
     /**
@@ -28,6 +33,7 @@ public interface NacosNamingInterceptorChain<T extends Interceptable> {
      *
      * @param interceptor interceptor
      */
+    //添加指定类型的拦截器对象
     void addInterceptor(NacosNamingInterceptor<T> interceptor);
     
     /**
@@ -35,5 +41,6 @@ public interface NacosNamingInterceptorChain<T extends Interceptable> {
      *
      * @param object be interceptor object
      */
+    //执行拦截的业务操作
     void doInterceptor(T object);
 }

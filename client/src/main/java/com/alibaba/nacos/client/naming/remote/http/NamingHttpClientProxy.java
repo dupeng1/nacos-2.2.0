@@ -69,7 +69,8 @@ import static com.alibaba.nacos.common.constant.RequestUrlConstants.HTTP_PREFIX;
  */
 
 /**
- * 底层通讯基于http短连接。使用的都是老代码基本没改，原来1.0NamingProxy重命名过来的
+ * 底层通讯基于http短连接，负责处理http客户端请求。使用的都是老代码基本没改，原来1.0NamingProxy重命名过来的
+ * 提供了服务注册、订阅、更新和查询的主要方法的实现和包装
  */
 public class NamingHttpClientProxy extends AbstractNamingClientProxy {
     
@@ -106,7 +107,7 @@ public class NamingHttpClientProxy extends AbstractNamingClientProxy {
     private static final String REGISTER_ENABLE_PARAM = "enable";
     
     private final String namespaceId;
-    
+    //服务地址列表管理
     private final ServerListManager serverListManager;
     
     private final int maxRetry;
@@ -154,6 +155,7 @@ public class NamingHttpClientProxy extends AbstractNamingClientProxy {
         params.put(HEALTHY_PARAM, String.valueOf(instance.isHealthy()));
         params.put(EPHEMERAL_PARAM, String.valueOf(instance.isEphemeral()));
         params.put(META_PARAM, JacksonUtils.toJson(instance.getMetadata()));
+        //调用服务端接口/nacos/v1/ns/instance进行注册
         reqApi(UtilAndComs.nacosUrlInstance, params, HttpMethod.POST);
     }
     
@@ -376,7 +378,7 @@ public class NamingHttpClientProxy extends AbstractNamingClientProxy {
         }
         
         NacosException exception = new NacosException();
-        //service只有一个的情况
+        //如果注册地址是域名（只有一个地址也认为是域名）
         if (serverListManager.isDomain()) {
             String nacosDomain = serverListManager.getNacosDomain();
             for (int i = 0; i < maxRetry; i++) {
@@ -390,6 +392,7 @@ public class NamingHttpClientProxy extends AbstractNamingClientProxy {
                 }
             }
         } else {
+            //如果是地址列表的话，重试次数是地址列表中地址的个数，第一次随机选择一个服务，发生错误之后从错误的地址开始，轮询下一个地址
             Random random = new Random();
             int index = random.nextInt(servers.size());
             

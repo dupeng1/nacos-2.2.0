@@ -40,6 +40,15 @@ import static com.alibaba.nacos.client.utils.LogUtils.NAMING_LOGGER;
  *
  * @author xuanyin
  */
+
+/**
+ * 1、磁盘缓存
+ * 从注册中心上获取的服务缓存在本地磁盘，这样提供一种从本地磁盘恢复服务的发现机制。
+ * 2、缓存目录&文件：
+ *      本地服务缓存路径：{user.home}/nacos/naming/public/
+ *      文件名：{groupName}@@{name}@@{clusters}
+ *      文件内容：服务对应的实例列表的JSON字符串
+ */
 public class DiskCache {
     
     /**
@@ -48,11 +57,13 @@ public class DiskCache {
      * @param dom service info
      * @param dir directory
      */
+    //将服务信息写入缓存文件
     public static void write(ServiceInfo dom, String dir) {
         
         try {
+            //判断缓存目录dir是否存在，如果不存在就会创建目录
             makeSureCacheDirExists(dir);
-            
+            //dom.getKeyEncoded()返回服务的key（经过URLEncoder），格式：{groupName}@@{name}@@{clusters}
             File file = new File(dir, dom.getKeyEncoded());
             if (!file.exists()) {
                 // add another !file.exists() to avoid conflicted creating-new-file from multi-instances
@@ -62,7 +73,7 @@ public class DiskCache {
             }
             
             StringBuilder keyContentBuffer = new StringBuilder();
-            
+            //服务信息json字符串形式
             String json = dom.getJsonFromServer();
             
             if (StringUtils.isEmpty(json)) {
@@ -70,7 +81,7 @@ public class DiskCache {
             }
             
             keyContentBuffer.append(json);
-            
+            //将服务信息写入文件
             //Use the concurrent API to ensure the consistency.
             ConcurrentDiskUtil.writeFileContent(file, keyContentBuffer.toString(), Charset.defaultCharset().toString());
             
@@ -89,6 +100,8 @@ public class DiskCache {
      * @param cacheDir cache file dir
      * @return service infos
      */
+    //从缓存目录读缓存的服务文件并解析成服务Map集合返回
+    //Key -> 服务名key（格式：{groupName}@@{name}@@{clusters}）
     public static Map<String, ServiceInfo> read(String cacheDir) {
         Map<String, ServiceInfo> domMap = new HashMap<>(16);
         
@@ -103,9 +116,8 @@ public class DiskCache {
                 if (!file.isFile()) {
                     continue;
                 }
-                
                 String fileName = URLDecoder.decode(file.getName(), "UTF-8");
-                
+                //从缓存目录中读取所有本地服务，解析成对象ServiceInfo，放入domMap，key是ServiceInfo的key
                 if (!(fileName.endsWith(Constants.SERVICE_INFO_SPLITER + "meta") || fileName
                         .endsWith(Constants.SERVICE_INFO_SPLITER + "special-url"))) {
                     ServiceInfo dom = new ServiceInfo(fileName);

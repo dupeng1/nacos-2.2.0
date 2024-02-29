@@ -118,13 +118,14 @@ public class DefaultPublisher extends Thread implements EventPublisher {
             int waitTimes = 60;
             // To ensure that messages are not lost, enable EventHandler when
             // waiting for the first Subscriber to register
+            // 死循环延迟，线程启动最大延时60秒，这个主要是为了解决消息积压的问题。
             while (!shutdown && !hasSubscriber() && waitTimes > 0) {
                 ThreadUtils.sleep(1000L);
                 waitTimes--;
             }
-
+            // 死循环不断的从队列中取出Event，并通知订阅者Subscriber执行Event
             while (!shutdown) {
-                // 取出事件，阻塞在queue的take方法上，当拿到一个event后就会执行receiveEvent方法，然后循环下一个事件的到来
+                // 从队列中取出Event，阻塞在queue的take方法上，当拿到一个event后就会执行receiveEvent方法，然后循环下一个事件的到来
                 final Event event = queue.take();
                 receiveEvent(event);
                 UPDATER.compareAndSet(this, lastEventSequence, Math.max(lastEventSequence, event.sequence()));
@@ -151,8 +152,10 @@ public class DefaultPublisher extends Thread implements EventPublisher {
     @Override
     public boolean publish(Event event) {
         checkIsStart();
+        // 向队列中插入事件元素
         // 插入事件到队列，queue是在DefaultPublisher中定义的BlockingQueue，队列已满则插入失败
         boolean success = this.queue.offer(event);
+        // 判断是否成功插入
         if (!success) {
             // 如果插入失败，则手动执行，同步发送事件（就是直接处理该事件）
             LOGGER.warn("Unable to plug in due to interruption, synchronize sending time, event : {}", event);

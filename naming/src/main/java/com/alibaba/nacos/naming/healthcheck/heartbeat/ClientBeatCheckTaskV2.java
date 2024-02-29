@@ -33,6 +33,11 @@ import java.util.Collection;
  *
  * @author nkorange
  */
+
+/**
+ * 心跳检查任务
+ * 在基于IPPort的Client对象中，客户端服务如果是临时实例（ephemeral=true），那么就会创建这个健康检查任务。
+ */
 public class ClientBeatCheckTaskV2 extends AbstractExecuteTask implements BeatCheckTask, NacosHealthCheckTask {
     
     private final IpPortBasedClient client;
@@ -64,10 +69,13 @@ public class ClientBeatCheckTaskV2 extends AbstractExecuteTask implements BeatCh
     @Override
     public void doHealthCheck() {
         try {
+            //从客户端的所有服务发布（注册）集合中取出对应的客户端服务；
             Collection<Service> services = client.getAllPublishedService();
             for (Service each : services) {
                 HealthCheckInstancePublishInfo instance = (HealthCheckInstancePublishInfo) client
                         .getInstancePublishInfo(each);
+                //基于拦截器的模式，对每个拦截执行InstanceBeatCheckTask对象的检查，默认情况下，有2个实例心跳检查器InstanceBeatChecker
+                //一个是UnhealthyInstanceChecker，一个是ExpiredInstanceChecker
                 interceptorChain.doInterceptor(new InstanceBeatCheckTask(client, each, instance));
             }
         } catch (Exception e) {

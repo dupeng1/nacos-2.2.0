@@ -49,6 +49,10 @@ import static com.alibaba.nacos.client.utils.LogUtils.NAMING_LOGGER;
  *
  * @author nkorange
  */
+
+/**
+ * 故障转移反应者，用来处理故障转移的
+ */
 public class FailoverReactor implements Closeable {
     
     private static final String FAILOVER_DIR = "/failover";
@@ -60,40 +64,49 @@ public class FailoverReactor implements Closeable {
     private static final String FAILOVER_MODE_PARAM = "failover-mode";
     
     private Map<String, ServiceInfo> serviceMap = new ConcurrentHashMap<>();
-    
+
+    //存储FAILOVER_MODE_PARAM对应的值，即故障转移状态
     private final Map<String, String> switchParams = new ConcurrentHashMap<>();
     
     private static final long DAY_PERIOD_MINUTES = 24 * 60;
     
     private final String failoverDir;
-    
+
+    //客户端持有的服务信息
     private final ServiceInfoHolder serviceInfoHolder;
     
     private final ScheduledExecutorService executorService;
     
     public FailoverReactor(ServiceInfoHolder serviceInfoHolder, String cacheDir) {
+        // 持有ServiceInfoHolder的引用
         this.serviceInfoHolder = serviceInfoHolder;
+        // 拼接故障目录：${user.home}/nacos/naming/public/failover
         this.failoverDir = cacheDir + FAILOVER_DIR;
         // init executorService
+        // 初始化executorService，支持延时执行
         this.executorService = new ScheduledThreadPoolExecutor(1, r -> {
             Thread thread = new Thread(r);
+            // 守护线程模式运行
             thread.setDaemon(true);
             thread.setName("com.alibaba.nacos.naming.failover");
             return thread;
         });
+        // 其他初始化操作，通过executorService开启多个定时任务执行
         this.init();
     }
     
     /**
      * Init.
      */
+    //开启了三个定时任务，这三个任务其实都是FailoverReactor的内部类
     public void init() {
-        
+        // 初始化立即执行，执行间隔5秒，执行任务SwitchRefresher
         executorService.scheduleWithFixedDelay(new SwitchRefresher(), 0L, 5000L, TimeUnit.MILLISECONDS);
-        
+        // 初始化延迟30分钟执行，执行间隔24小时，执行任务DiskFileWriter
         executorService.scheduleWithFixedDelay(new DiskFileWriter(), 30, DAY_PERIOD_MINUTES, TimeUnit.MINUTES);
         
         // backup file on startup if failover directory is empty.
+        // 初始化延迟10秒，执行核心操作为DiskFileWriter
         executorService.schedule(() -> {
             try {
                 File cacheDir = new File(failoverDir);
@@ -103,6 +116,7 @@ public class FailoverReactor implements Closeable {
                 }
 
                 File[] files = cacheDir.listFiles();
+                //如果故障目录为空，则执行DiskFileWriter任务强制备份
                 if (files == null || files.length <= 0) {
                     new DiskFileWriter().run();
                 }
@@ -134,7 +148,8 @@ public class FailoverReactor implements Closeable {
         ThreadUtils.shutdownThreadPool(executorService, NAMING_LOGGER);
         NAMING_LOGGER.info("{} do shutdown stop", className);
     }
-    
+
+    //用于判断是否开启故障转移模式和在开启时则读取本地故障转移目录下的文件来初始化服务实例信息
     class SwitchRefresher implements Runnable {
         
         long lastModifiedMillis = 0L;
@@ -142,7 +157,12 @@ public class FailoverReactor implements Closeable {
         @Override
         public void run() {
             try {
+                //1、故障转移文件目录是本地缓目录/failover，一般情况下就是{user.home}/nacos/naming/public/failover
+                //2、故障转移文件：00-00---000-VIPSRV_FAILOVER_SWITCH-000---00-00，该文件用于定义是否开启故障转移，文件内容1标识开启，0标识关闭
+                //；在定时线程执行过程，如果读取到该文件，且该文件内容为1，则会执行一次线程FailoverFileReader
+                //3、本地缓存目录/failover下其他文件的文件名表示ServiceInfo信息
                 File switchFile = new File(failoverDir + UtilAndComs.FAILOVER_SWITCH);
+                // 文件不存在则退出。如果故障转移文件不存在，则直接返回（文件开关）
                 if (!switchFile.exists()) {
                     switchParams.put(FAILOVER_MODE_PARAM, Boolean.FALSE.toString());
                     NAMING_LOGGER.debug("failover switch is not found, {}", switchFile.getName());
@@ -150,9 +170,10 @@ public class FailoverReactor implements Closeable {
                 }
                 
                 long modified = switchFile.lastModified();
-                
+                //比较文件修改时间，如果已经修改，则获取故障转移文件中的内容。
                 if (lastModifiedMillis < modified) {
                     lastModifiedMillis = modified;
+                    // 获取故障转移文件内容，故障转移文件中存储了0和1标识。0表示关闭，1表示开启。
                     String failover = ConcurrentDiskUtil.getFileContent(failoverDir + UtilAndComs.FAILOVER_SWITCH,
                             Charset.defaultCharset().toString());
                     if (!StringUtils.isEmpty(failover)) {
@@ -160,10 +181,13 @@ public class FailoverReactor implements Closeable {
                         
                         for (String line : lines) {
                             String line1 = line.trim();
+                            // 1 表示开启故障转移模式
                             if (IS_FAILOVER_MODE.equals(line1)) {
                                 switchParams.put(FAILOVER_MODE_PARAM, Boolean.TRUE.toString());
                                 NAMING_LOGGER.info("failover-mode is on");
+                                //当为开启状态时，执行线程FailoverFileReader。
                                 new FailoverFileReader().run();
+                                // 0 表示关闭故障转移模式
                             } else if (NO_FAILOVER_MODE.equals(line1)) {
                                 switchParams.put(FAILOVER_MODE_PARAM, Boolean.FALSE.toString());
                                 NAMING_LOGGER.info("failover-mode is off");
@@ -179,7 +203,9 @@ public class FailoverReactor implements Closeable {
             }
         }
     }
-    
+
+    //故障转移文件读取
+    // 基本操作就是读取failover目录存储的备份服务信息文件内容，然后转换成ServiceInfo，并且将所有的ServiceInfo储存在FailoverReactor的ServiceMap属性中
     class FailoverFileReader implements Runnable {
         
         @Override
@@ -193,8 +219,9 @@ public class FailoverReactor implements Closeable {
                 if (!cacheDir.exists() && !cacheDir.mkdirs()) {
                     throw new IllegalStateException("failed to create cache dir: " + failoverDir);
                 }
-                
+                // 读取failover目录下的所有文件，进行遍历处理
                 File[] files = cacheDir.listFiles();
+                //如果文件不存在跳过
                 if (files == null) {
                     return;
                 }
@@ -203,11 +230,11 @@ public class FailoverReactor implements Closeable {
                     if (!file.isFile()) {
                         continue;
                     }
-                    
+                    //如果文件是故障转移开关标志文件跳过
                     if (file.getName().equals(UtilAndComs.FAILOVER_SWITCH)) {
                         continue;
                     }
-                    
+                    //读取文件中的备份内容，转换为ServiceInfo对象
                     ServiceInfo dom = new ServiceInfo(file.getName());
                     
                     try {
@@ -235,6 +262,7 @@ public class FailoverReactor implements Closeable {
                             //ignore
                         }
                     }
+                    //将ServiceInfo对象放入到domMap中
                     if (!CollectionUtils.isEmpty(dom.getHosts())) {
                         domMap.put(dom.getKey(), dom);
                     }
@@ -242,13 +270,13 @@ public class FailoverReactor implements Closeable {
             } catch (Exception e) {
                 NAMING_LOGGER.error("[NA] failed to read cache file", e);
             }
-            
+            //最后判断domMap不为空，赋值给serviceMap
             if (domMap.size() > 0) {
                 serviceMap = domMap;
             }
         }
     }
-    
+    //就是获取ServiceInfo中缓存的ServiceInfo，判断是否满足写入磁盘，如果条件满足，就将其写入拼接的故障目录
     class DiskFileWriter extends TimerTask {
         
         @Override
@@ -263,7 +291,7 @@ public class FailoverReactor implements Closeable {
                         .equals(serviceInfo.getName(), UtilAndComs.ALL_HOSTS)) {
                     continue;
                 }
-                
+                // 将缓存写入磁盘
                 DiskCache.write(serviceInfo, failoverDir);
             }
         }
@@ -272,7 +300,7 @@ public class FailoverReactor implements Closeable {
     public boolean isFailoverSwitch() {
         return Boolean.parseBoolean(switchParams.get(FAILOVER_MODE_PARAM));
     }
-    
+
     public ServiceInfo getService(String key) {
         ServiceInfo serviceInfo = serviceMap.get(key);
         

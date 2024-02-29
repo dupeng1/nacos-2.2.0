@@ -41,15 +41,17 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 
 /**
- * 1、负责接收Nacos服务器的实例变更通知，包括实例的启动、关闭、迁移等操作
- * 当Nacos服务器上的实例发生变化时，该组件会立即将变更通知发送给相关的服务消费者，确保服务的高可用性和稳定性
- * 2、在使用Nacos时，如果你需要将服务实例的变更实时通知给其他服务消费者，那么InstancesChangeNotifier将是
- * 一个非常不错的选择。
+ * 订阅事件订阅者
+ * 1、注册和删除事件监听（EventListener）
+ * 2、验证服务是否订阅（是否存在监听器）
+ * 3、订阅事件的回调处理（onEvent）
+ * 4、
  */
 public class InstancesChangeNotifier extends Subscriber<InstancesChangeEvent> {
     
     private final String eventScope;
-    //key 为 由服务名、组名、集群所构成字符串，可以唯一标识一种服务订阅类型，值为监听该服务的EventListrner的集合
+    // key 为 由服务名、组名、集群所构成字符串，可以唯一标识一种服务订阅类型，格式：groupName@@serviceName@@clusters
+    // 值为监听该服务的EventListrner的集合
     private final Map<String, ConcurrentHashSet<EventListener>> listenerMap = new ConcurrentHashMap<>();
     
     @JustForTest
@@ -69,7 +71,8 @@ public class InstancesChangeNotifier extends Subscriber<InstancesChangeEvent> {
      * @param clusters    clusters, concat by ','. such as 'xxx,yyy'
      * @param listener    custom listener
      */
-    //事件的注册便是将EventListener存储在InstancesChangeNotifier的listenerMap属性当中了
+    //注册事件监听（EventListener）
+    //将EventListener存储在InstancesChangeNotifier的listenerMap属性当中了
     public void registerListener(String groupName, String serviceName, String clusters, EventListener listener) {
         //将一个EventListener注册到了订阅者的监听者集合 listenerMap
         String key = ServiceInfo.getKey(NamingUtils.getGroupedName(serviceName, groupName), clusters);
@@ -85,6 +88,8 @@ public class InstancesChangeNotifier extends Subscriber<InstancesChangeEvent> {
      * @param clusters    clusters, concat by ','. such as 'xxx,yyy'
      * @param listener    custom listener
      */
+    //删除事件监听（EventListener）
+    //将EventListener从InstancesChangeNotifier的listenerMap属性当中删除
     public void deregisterListener(String groupName, String serviceName, String clusters, EventListener listener) {
         String key = ServiceInfo.getKey(NamingUtils.getGroupedName(serviceName, groupName), clusters);
         ConcurrentHashSet<EventListener> eventListeners = listenerMap.get(key);
@@ -105,6 +110,8 @@ public class InstancesChangeNotifier extends Subscriber<InstancesChangeEvent> {
      * @param clusters    clusters, concat by ','. such as 'xxx,yyy'
      * @return is serviceName,clusters subscribed
      */
+    //验证服务是否存在监听器
+    //即判断指定服务在listenerMap是否存在监听器
     public boolean isSubscribed(String groupName, String serviceName, String clusters) {
         String key = ServiceInfo.getKey(NamingUtils.getGroupedName(serviceName, groupName), clusters);
         ConcurrentHashSet<EventListener> eventListeners = listenerMap.get(key);

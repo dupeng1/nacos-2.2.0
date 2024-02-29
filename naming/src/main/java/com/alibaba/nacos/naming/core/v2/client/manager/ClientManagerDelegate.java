@@ -35,6 +35,10 @@ import java.util.HashSet;
  *
  * @author xiweng.yy
  */
+
+/**
+ * ClientManager代理，内部通过clientId来判断选择哪个实现类
+ */
 @DependsOn({"clientServiceIndexesManager", "namingMetadataManager"})
 @Component("clientManager")
 public class ClientManagerDelegate implements ClientManager {
